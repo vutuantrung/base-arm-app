@@ -66,3 +66,14 @@ graceful shutdown with explicit reporting of blocked components. See
 
 Adapters that perform external side effects should use `context.assertCurrent()`
 before committing state. ARM cannot forcibly cancel uncooperative promises.
+
+## Phase 5 — Integration & Reliability Testing
+
+A generic connection adapter is available at
+`packages/adapters/src/reconnectable-resource.ts` for swapping healthy
+Database or WebSocket sessions while honoring ARM operation fencing.
+
+Integration scenarios: `tests/integration-reliability.test.ts`.
+See [Phase 5 instructions](docs/PHASE_5_INTEGRATION_TESTING.md).
+
+To run: `npm install && npm run build && npm test`.
