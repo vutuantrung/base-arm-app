@@ -1,5 +1,6 @@
 import {EventEmitter} from 'node:events';
 import type {MetricsRegistry} from './metrics.js';
+import { RecoveryGuard, PermanentRecoveryError, type RecoveryLimits, type RecoveryGuardSnapshot } from './recovery-policy.js';
 
 export type HealthStatus = 'HEALTHY' | 'DEGRADED' | 'UNHEALTHY' | 'UNKNOWN';
 export type LifecycleStatus = 'CREATED' | 'STARTING' | 'RUNNING' | 'RECOVERING' | 'STOPPING' | 'STOPPED' | 'FAILED';
@@ -11,10 +12,10 @@ export interface ManagedComponent {
   checkHealth(): Promise<HealthResult>;
   recover?(): Promise<void>;
 }
-export interface RecoveryPolicy { enabled: boolean; maxAttempts: number; baseDelayMs: number; maxDelayMs: number; timeoutMs: number; }
+export interface RecoveryPolicy extends RecoveryLimits { enabled: boolean; maxAttempts: number; baseDelayMs: number; maxDelayMs: number; timeoutMs: number; }
 export interface ComponentRegistration { component: ManagedComponent; critical: boolean; recovery: RecoveryPolicy; }
-export interface ComponentStatus { id: string; critical: boolean; lifecycle: LifecycleStatus; health: HealthResult; recoveryAttempts: number; lastRecoveryAt?: string; }
-export interface ReliabilityEvent { sequence: number; timestamp: string; componentId: string; type: 'lifecycle' | 'health' | 'recovery.started' | 'recovery.succeeded' | 'recovery.failed'; detail?: string; }
+export interface ComponentStatus { id: string; critical: boolean; lifecycle: LifecycleStatus; health: HealthResult; recoveryAttempts: number; lastRecoveryAt?: string; recoveryGuard?: RecoveryGuardSnapshot; }
+export interface ReliabilityEvent { sequence: number; timestamp: string; componentId: string; type: 'lifecycle' | 'health' | 'recovery.started' | 'recovery.succeeded' | 'recovery.failed' | 'recovery.denied'; detail?: string; }
 const validId = /^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$/;
 const values: Record<HealthStatus, number> = {UNKNOWN: -1, UNHEALTHY: 0, DEGRADED: 1, HEALTHY: 2};
 const healthStatuses = new Set(Object.keys(values));
@@ -33,6 +34,7 @@ export class ReliabilityManager extends EventEmitter {
   private readonly states = new Map<string, ComponentStatus>();
   private readonly recoveryInFlight = new Map<string, Promise<void>>();
   private readonly checkingInFlight = new Set<string>();
+  private readonly recoveryGuards = new Map<string, RecoveryGuard>();
   private readonly events: ReliabilityEvent[] = [];
   private sequence = 0;
   private monitoring?: NodeJS.Timeout;
@@ -49,6 +51,7 @@ export class ReliabilityManager extends EventEmitter {
     if (!validId.test(r.component.id) || this.registrations.has(r.component.id)) throw new Error('Invalid or duplicate component id');
     const p = r.recovery;
     if (!Number.isInteger(p.maxAttempts) || p.maxAttempts < 0 || ![p.baseDelayMs,p.maxDelayMs,p.timeoutMs].every(Number.isFinite) || p.baseDelayMs < 0 || p.maxDelayMs < p.baseDelayMs || p.timeoutMs < 1) throw new Error('Invalid recovery policy');
+    this.recoveryGuards.set(r.component.id, new RecoveryGuard(r.recovery));
     this.registrations.set(r.component.id, r);
     this.states.set(r.component.id, {id:r.component.id, critical:r.critical, lifecycle:'CREATED', health:{status:'UNKNOWN',checkedAt:new Date().toISOString()}, recoveryAttempts:0});
     this.publishMetrics(r.component.id);
@@ -64,6 +67,12 @@ export class ReliabilityManager extends EventEmitter {
     this.metrics.gauge(`arm.component.${id}.health`, values[state.health.status], 'state');
     this.metrics.gauge(`arm.component.${id}.recovery_attempts`, state.recoveryAttempts, 'count');
     this.metrics.gauge(`arm.component.${id}.running`, state.lifecycle === 'RUNNING' ? 1 : 0, 'boolean');
+    const guard = this.recoveryGuards.get(id)?.snapshot();
+    if (guard) {
+      this.metrics.gauge(`arm.component.${id}.recovery_budget_used`, guard.attemptsInWindow, 'count');
+      this.metrics.gauge(`arm.component.${id}.circuit_open`, guard.circuit === 'CLOSED' ? 0 : 1, 'boolean');
+      this.metrics.gauge(`arm.component.${id}.recovery_retry_after_ms`, guard.retryAfterMs, 'milliseconds');
+    }
     this.metrics.gauge('arm.components.total', this.states.size, 'count');
     this.metrics.gauge('arm.components.healthy', [...this.states.values()].filter(x=>x.health.status==='HEALTHY').length, 'count');
     this.metrics.gauge('arm.components.unhealthy', [...this.states.values()].filter(x=>x.health.status==='UNHEALTHY').length, 'count');
@@ -108,44 +117,116 @@ export class ReliabilityManager extends EventEmitter {
     this.monitoring=setInterval(()=>{void this.checkAll().catch(()=>{});},this.options.checkIntervalMs??5000);
     this.monitoring.unref();
   }
+  /**
+   * Only one recovery execution may run per component.
+   * The guard persists across cycles to prevent infinite automatic retries.
+   */
   recover(id: string): Promise<void> {
-    const existing=this.recoveryInFlight.get(id);
-    if(existing) return existing;
-    const r=this.registrations.get(id);
-    if(!r) return Promise.reject(new Error('Unknown component'));
-    if(this.stopping || !this.active || !r.recovery.enabled || !r.component.recover || !['RUNNING','FAILED'].includes(this.states.get(id)!.lifecycle)) return Promise.resolve();
-    const task=Promise.resolve().then(async()=>{
-      this.lifecycle(id,'RECOVERING');
-      const p=r.recovery;
-      for(let attempt=1;attempt<=p.maxAttempts && !this.stopping;attempt++) {
-        if(attempt>1) await sleep(Math.min(p.maxDelayMs,p.baseDelayMs*2**Math.min(attempt-2,20)));
-        if(this.stopping) break;
-        const state=this.states.get(id)!;
-        state.recoveryAttempts++;
-        state.lastRecoveryAt=new Date().toISOString();
-        this.publishMetrics(id);
-        this.emitEvent(id,'recovery.started',`attempt ${attempt}`);
-        const start=performance.now();
-        try {
-          await within(()=>r.component.recover!(),p.timeoutMs);
-          const result=await this.healthCheck(id);
-          if(result.status==='UNHEALTHY' || result.status==='UNKNOWN') throw new Error(`Recovery verification: ${result.status}`);
-          this.metrics.gauge(`arm.component.${id}.last_recovery_duration_ms`,performance.now()-start,'milliseconds');
-          this.metrics.increment('arm.recovery.success_total');
-          this.emitEvent(id,'recovery.succeeded',`attempt ${attempt}`);
-          this.lifecycle(id,'RUNNING');
-          return;
-        } catch(e) {
-          this.metrics.increment('arm.recovery.failure_total');
-          this.emitEvent(id,'recovery.failed',e instanceof Error?e.message:String(e));
-        }
-      }
-      if(!this.stopping) this.lifecycle(id,'FAILED');
-    }).finally(()=>this.recoveryInFlight.delete(id));
-    this.recoveryInFlight.set(id,task);
+    const existing = this.recoveryInFlight.get(id);
+    if (existing) return existing;
+
+    const registration = this.registrations.get(id);
+    if (!registration) return Promise.reject(new Error('Unknown component'));
+
+    const { component, recovery: policy } = registration;
+    const lifecycle = this.states.get(id)!.lifecycle;
+
+    if (
+      this.stopping ||
+      !this.active ||
+      !policy.enabled ||
+      !component.recover ||
+      !['RUNNING', 'FAILED'].includes(lifecycle)
+    ) {
+      return Promise.resolve();
+    }
+
+    const task = this.runRecovery(id, component, policy)
+      .finally(() => this.recoveryInFlight.delete(id));
+
+    this.recoveryInFlight.set(id, task);
     return task;
   }
-  statuses(): ComponentStatus[] {return [...this.states.values()].map(x=>({...x,health:{...x.health}}));}
+
+  private async runRecovery(
+    id: string,
+    component: ManagedComponent,
+    policy: RecoveryPolicy,
+  ): Promise<void> {
+    const guard = this.recoveryGuards.get(id)!;
+    const originalLifecycle = this.states.get(id)!.lifecycle;
+
+    for (let attempt = 1; attempt <= policy.maxAttempts && !this.stopping; attempt++) {
+      if (attempt > 1) {
+        const exponential = policy.baseDelayMs * 2 ** Math.min(attempt - 2, 20);
+        await sleep(Math.min(policy.maxDelayMs, exponential));
+      }
+      if (this.stopping) return;
+
+      const decision = guard.acquire();
+      if (!decision.allowed) {
+        this.publishMetrics(id);
+        this.emitEvent(id, 'recovery.denied', decision.reason);
+        break;
+      }
+
+      this.lifecycle(id, 'RECOVERING');
+
+      const state = this.states.get(id)!;
+      state.recoveryAttempts++;
+      state.lastRecoveryAt = new Date().toISOString();
+      this.publishMetrics(id);
+      this.emitEvent(id, 'recovery.started', `attempt ${attempt}`);
+
+      const startedAt = performance.now();
+
+      try {
+        await within(() => component.recover!(), policy.timeoutMs);
+        const result = await this.healthCheck(id);
+
+        if (result.status !== 'HEALTHY') {
+          throw new Error(`Recovery verification: ${result.status}`);
+        }
+
+        guard.succeeded();
+        this.metrics.gauge(
+          `arm.component.${id}.last_recovery_duration_ms`,
+          performance.now() - startedAt,
+          'milliseconds',
+        );
+        this.metrics.increment('arm.recovery.success_total');
+        this.emitEvent(id, 'recovery.succeeded', `attempt ${attempt}`);
+        this.lifecycle(id, 'RUNNING');
+        return;
+      } catch (error) {
+        guard.failed();
+        this.metrics.increment('arm.recovery.failure_total');
+        const reason = error instanceof Error ? error.message : String(error);
+        this.emitEvent(id, 'recovery.failed', reason);
+        this.publishMetrics(id);
+
+        // Configuration and other permanent errors cannot be fixed by retrying.
+        if (error instanceof PermanentRecoveryError) {
+          this.lifecycle(id, 'FAILED');
+          return;
+        }
+      }
+    }
+
+    if (!this.stopping) {
+      // Preserve readiness=false while allowing future health checks after cooldown.
+      // A startup failure remains FAILED until an explicit recovery is attempted.
+      this.lifecycle(id, originalLifecycle === 'FAILED' ? 'FAILED' : 'RUNNING');
+    }
+  }
+
+  statuses(): ComponentStatus[] {
+    return [...this.states.values()].map(state => ({
+      ...state,
+      health: {...state.health},
+      recoveryGuard: this.recoveryGuards.get(state.id)?.snapshot(),
+    }));
+  }
   recentEvents(since=0): ReliabilityEvent[] {return this.events.filter(x=>x.sequence>since).map(x=>({...x}));}
   readiness() {
     const critical=this.statuses().filter(x=>x.critical);
