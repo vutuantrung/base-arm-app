@@ -3,12 +3,23 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "workspaces": ["packages/*", "examples/*"],
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
   "scripts": {
     "build": "tsc -b",
-     "test": "node --import tsx --test tests/*.test.ts",
-     "dev": "tsx watch examples/nodejs-api/src/index.ts"
-    },
-  "devDependencies": {"@types/node": "^22.0.0", "@types/ws": "^8.5.0", "tsx": "^4.19.0", "typescript": "^5.7.0"},
-  "dependencies": {"ws": "^8.18.0"}
+    "test": "node --import tsx --test tests/*.test.ts",
+    "dev": "tsx watch examples/nodejs-api/src/index.ts",
+    "dev:supervisor": "tsx examples/supervisor/src/index.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
 }
