@@ -91,3 +91,16 @@ node dist/examples/supervisor/src/index.js
 ```
 
 Ctrl+C stops the Supervisor and WebSocket collectors, **not the detached app**. Process restart is explicit; WebSocket disconnection alone does not restart an app.
+
+## Dynamic self-registration of external apps
+
+An independently started ARM-enabled Node.js application can register itself with the Supervisor registration API, after which the Supervisor connects to its ARM `/metrics/ws` endpoint. This provides **monitor-only** visibility and does not authorize process stop/restart.
+
+See [Dynamic Registration](docs/DYNAMIC_REGISTRATION.md).
+
+```bash
+# Terminal 1
+SUPERVISOR_REGISTRATION_TOKEN=development-secret npm run dev:registration
+# Terminal 2
+SUPERVISOR_REGISTRATION_TOKEN=development-secret PORT=3101 npm run dev
+```

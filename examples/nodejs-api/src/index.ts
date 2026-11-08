@@ -1,3 +1,4 @@
+import { ApplicationRegistrationClient } from '../../../packages/adapter-process/src/application-registration-client.js';
 import { MetricsRegistry, NodeMetricsCollector } from '../../../packages/core/src/metrics.js';
 import { ReliabilityManager, type ManagedComponent } from '../../../packages/core/src/reliability.js';
 import { MetricsServer } from '../../../packages/adapter-http/src/server.js';
@@ -47,6 +48,17 @@ const business = setInterval(() => metrics.increment('app.jobs.completed_total')
 business.unref();
 await server.start();
 
+const registration = process.env.SUPERVISOR_REGISTRATION_TOKEN
+  ? new ApplicationRegistrationClient({
+      applicationId: process.env.APPLICATION_ID ?? 'example-app',
+      instanceId: process.env.INSTANCE_ID ?? `pid-${process.pid}`,
+      metricsUrl: `ws://127.0.0.1:${process.env.PORT ?? 3100}/metrics/ws`,
+      supervisorUrl: process.env.SUPERVISOR_URL ?? 'http://127.0.0.1:3200',
+      token: process.env.SUPERVISOR_REGISTRATION_TOKEN,
+    })
+  : undefined;
+registration?.start(error => console.warn('Supervisor unavailable:', error));
+
 console.log(`ARM listening at http://127.0.0.1:${process.env.PORT ?? 3100}/metrics`);
 
 let shuttingDown = false;
@@ -54,6 +66,7 @@ async function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
   clearInterval(business);
+  registration?.stop();
   collector.stop();
   await arm.stop();
   await server.stop();

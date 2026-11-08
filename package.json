@@ -11,7 +11,8 @@
     "build": "tsc -b",
     "test": "node --import tsx --test tests/*.test.ts",
     "dev": "tsx watch examples/nodejs-api/src/index.ts",
-    "dev:supervisor": "tsx examples/supervisor/src/index.ts"
+    "dev:supervisor": "tsx examples/supervisor/src/index.ts",
+    "dev:registration": "tsx examples/supervisor/src/registration.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

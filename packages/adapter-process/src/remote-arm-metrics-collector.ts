@@ -1,7 +1,12 @@
 import { EventEmitter } from 'node:events';
 import WebSocket from 'ws';
 import type { Metric, MetricsSnapshot } from '../../core/src/metrics.js';
-import type { ProcessSpec } from './process-manager.js';
+export interface RemoteArmTarget {
+  id: string;
+  metricsUrl: string;
+  metricsToken?: string;
+}
+
 
 export interface RemoteMetricsState {
   id: string;
@@ -22,19 +27,48 @@ export class RemoteArmMetricsCollector extends EventEmitter {
   private readonly reconnectTimers = new Map<string, NodeJS.Timeout>();
   private readonly generations = new Map<string, number>();
   private running = false;
+  private readonly targets = new Map<string, RemoteArmTarget>();
 
   constructor(
-    private readonly specs: ProcessSpec[],
+    initialTargets: RemoteArmTarget[],
     private readonly reconnectDelayMs = 2000,
     private readonly maxAgeMs = 15000,
   ) {
     super();
+    for (const target of initialTargets) this.targets.set(target.id, { ...target });
+  }
+
+  /** Adds an external app at runtime, or replaces its metrics endpoint. */
+  upsert(target: RemoteArmTarget): void {
+    const previous = this.targets.get(target.id);
+    if (previous?.metricsUrl === target.metricsUrl && previous?.metricsToken === target.metricsToken) return;
+    this.disconnect(target.id);
+    this.targets.set(target.id, { ...target });
+    if (this.running) this.connect(target);
+  }
+
+  remove(id: string): void {
+    this.disconnect(id);
+    this.targets.delete(id);
+    this.states.delete(id);
+  }
+
+  private disconnect(id: string): void {
+    this.generations.set(id, (this.generations.get(id) ?? 0) + 1);
+    const timer = this.reconnectTimers.get(id);
+    if (timer) clearTimeout(timer);
+    this.reconnectTimers.delete(id);
+    const connection = this.connections.get(id);
+    this.connections.delete(id);
+    connection?.terminate();
+    const state = this.states.get(id);
+    if (state) state.connected = false;
   }
 
   start(): void {
     if (this.running) return;
     this.running = true;
-    for (const spec of this.specs) this.connect(spec);
+    for (const spec of this.targets.values()) this.connect(spec);
   }
 
   stop(): void {
@@ -66,7 +100,7 @@ export class RemoteArmMetricsCollector extends EventEmitter {
       Date.now() - new Date(state.lastSnapshotAt).getTime() <= this.maxAgeMs;
   }
 
-  private connect(spec: ProcessSpec): void {
+  private connect(spec: RemoteArmTarget): void {
     if (!this.running) return;
     const old = this.connections.get(spec.id);
     if (old && old.readyState !== WebSocket.CLOSED) return;
@@ -143,7 +177,7 @@ export class RemoteArmMetricsCollector extends EventEmitter {
     });
   }
 
-  private scheduleReconnect(spec: ProcessSpec, generation: number): void {
+  private scheduleReconnect(spec: RemoteArmTarget, generation: number): void {
     if (!this.running || this.generations.get(spec.id) !== generation) return;
     const existing = this.reconnectTimers.get(spec.id);
     if (existing) clearTimeout(existing);
