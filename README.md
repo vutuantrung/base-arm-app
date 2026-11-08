@@ -77,3 +77,17 @@ Integration scenarios: `tests/integration-reliability.test.ts`.
 See [Phase 5 instructions](docs/PHASE_5_INTEGRATION_TESTING.md).
 
 To run: `npm install && npm run build && npm test`.
+
+## External Node.js Process Supervisor
+
+The optional `adapter-process` module launches detached Node.js apps, persists PID records, adopts verified Linux processes after Supervisor restart, and connects to each application's existing ARM `/metrics/ws` endpoint.
+
+See [Process Supervisor documentation](docs/PROCESS_SUPERVISOR.md) and `examples/supervisor/src/index.ts`.
+
+```bash
+npm install
+npm run build
+node dist/examples/supervisor/src/index.js
+```
+
+Ctrl+C stops the Supervisor and WebSocket collectors, **not the detached app**. Process restart is explicit; WebSocket disconnection alone does not restart an app.
