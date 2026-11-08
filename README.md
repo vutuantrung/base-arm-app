@@ -1,4 +1,4 @@
-# base-arm-app — Metrics Reporting and Reliability v2
+# base-arm-app — Application Reliability Manager (Phase 4)
 
 Reusable process-local Application Reliability Manager components implemented in TypeScript. Includes HTTP JSON and WebSocket reporting; no user interface.
 
@@ -56,3 +56,13 @@ This is a starter implementation and must be hardened before production use.
 - `host.*` metrics reflect OS-visible resources, not necessarily container limits.
 
 Run `npm test` and `npm run build` after installing dependencies; these checks were not verified during initial generation because package installation timed out.
+
+## Phase 4 — Recovery Safety
+
+ARM now includes cooperative `AbortSignal` cancellation, generation-based
+operation fencing, prevention of overlapping lifecycle operations, and bounded
+graceful shutdown with explicit reporting of blocked components. See
+[Phase 4 documentation](docs/PHASE_4_RECOVERY_SAFETY.md).
+
+Adapters that perform external side effects should use `context.assertCurrent()`
+before committing state. ARM cannot forcibly cancel uncooperative promises.
