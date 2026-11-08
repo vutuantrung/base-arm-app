@@ -35,19 +35,40 @@ export class OperationManager {
   private readonly generations = new Map<string, number>();
   private readonly active = new Map<string, ActiveOperation>();
 
+  /** Returns true if the component has an active operation. */
+  /**
+   * @param id The ID of the component.
+   * @returns True if the component has an active operation, false otherwise.
+   */
   hasActive(id: string): boolean {
     return this.active.has(id);
   }
 
+  /** Invalidate the current operation for the specified component. */
+  /**
+   * @param id The ID of the component.
+   */
   invalidate(id: string): void {
     this.generations.set(id, (this.generations.get(id) ?? 0) + 1);
     this.active.get(id)?.controller.abort();
   }
 
+  /** Abort all active operations for all components. */
+  /**
+   * This will trigger the abort signal for all active operations.
+   */
   abortAll(): void {
     for (const id of this.active.keys()) this.invalidate(id);
   }
 
+  /** Execute an operation with cooperative cancellation and timeout. */
+  /**
+   * @param id The ID of the component.
+   * @param operation The name of the operation.
+   * @param timeoutMs The timeout in milliseconds.
+   * @param action The async action to execute.
+   * @returns The result of the action.
+   */
   async execute<T>(
     id: string,
     operation: string,
@@ -115,7 +136,11 @@ export class OperationManager {
     }
   }
 
-  /** Returns false if uncooperative operations remain active after the deadline. */
+  /**
+   * Returns false if uncooperative operations remain active after the deadline.
+   * @param timeoutMs The maximum time to wait for all operations to become idle.
+   * @returns True if all operations became idle within the timeout, false otherwise.
+   */
   async waitForIdle(timeoutMs: number): Promise<boolean> {
     const pending = [...this.active.values()].map(entry => entry.finished);
     if (pending.length === 0) return true;

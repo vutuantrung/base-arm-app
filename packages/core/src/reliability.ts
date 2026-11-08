@@ -12,6 +12,8 @@ import {
   OperationTimeoutError,
   type OperationContext,
 } from './operations.js';
+import { VALID_ID_PATTERN } from '../../shared/constants.js';
+import { describe, delay } from '../../shared/helpers.js';
 
 export type HealthStatus = 'HEALTHY' | 'DEGRADED' | 'UNHEALTHY' | 'UNKNOWN';
 export type LifecycleStatus =
@@ -90,16 +92,6 @@ const healthValues: Record<HealthStatus, number> = {
   HEALTHY: 2,
 };
 
-const validId = /^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$/;
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function delay(milliseconds: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, milliseconds));
-}
-
 /**
  * Coordinates process-local lifecycle, health monitoring and recovery.
  * External side effects must honor OperationContext for fencing to be effective.
@@ -139,19 +131,28 @@ export class ReliabilityManager extends EventEmitter {
     }
   }
 
+  /**
+   * Register a new component with its recovery policy.
+   * Must be called before the manager is started.
+   * @param registration The component registration containing its recovery policy.
+   */
   register(registration: ComponentRegistration): void {
-    if (this.active || this.stopping) throw new Error('Cannot register after start');
+    if (this.active || this.stopping) {
+      throw new Error('Cannot register after start');
+    }
 
     const { component, recovery } = registration;
-    if (!validId.test(component.id) || this.registrations.has(component.id)) {
+    if (!VALID_ID_PATTERN.test(component.id) || this.registrations.has(component.id)) {
       throw new Error('Invalid or duplicate component id');
     }
 
     if (
-      !Number.isInteger(recovery.maxAttempts) || recovery.maxAttempts < 0 ||
-      ![recovery.baseDelayMs, recovery.maxDelayMs, recovery.timeoutMs].every(Number.isFinite) ||
-      recovery.baseDelayMs < 0 || recovery.maxDelayMs < recovery.baseDelayMs ||
-      recovery.timeoutMs < 1
+      !Number.isInteger(recovery.maxAttempts)
+      || recovery.maxAttempts < 0
+      || ![recovery.baseDelayMs, recovery.maxDelayMs, recovery.timeoutMs].every(Number.isFinite)
+      || recovery.baseDelayMs < 0
+      || recovery.maxDelayMs < recovery.baseDelayMs
+      || recovery.timeoutMs < 1
     ) {
       throw new Error('Invalid recovery policy');
     }
@@ -169,6 +170,12 @@ export class ReliabilityManager extends EventEmitter {
     this.publishMetrics(component.id);
   }
 
+  /**
+   * Record an event related to a component's reliability.
+   * @param id The component ID.
+   * @param type The type of reliability event.
+   * @param detail Optional detail about the event.
+   */
   private event(id: string, type: ReliabilityEventType, detail?: string): void {
     const item: ReliabilityEvent = {
       sequence: ++this.sequence,
@@ -185,6 +192,10 @@ export class ReliabilityManager extends EventEmitter {
     this.emit('event', item);
   }
 
+  /**
+   * Publish the current metrics for a component.
+   * @param id The component ID.
+   */
   private publishMetrics(id: string): void {
     const state = this.states.get(id)!;
     const guard = this.guards.get(id)?.snapshot();
@@ -206,12 +217,22 @@ export class ReliabilityManager extends EventEmitter {
     this.metrics.gauge('arm.components.unhealthy', states.filter(s => s.health.status === 'UNHEALTHY').length, 'count');
   }
 
+  /**
+   * Update the lifecycle status of a component.
+   * @param id The component ID.
+   * @param value The new lifecycle status.
+   */
   private lifecycle(id: string, value: LifecycleStatus): void {
     this.states.get(id)!.lifecycle = value;
     this.publishMetrics(id);
     this.event(id, 'lifecycle', value);
   }
 
+  /**
+   * Update the health status of a component.
+   * @param id The component ID.
+   * @param result The new health result.
+   */
   private updateHealth(id: string, result: HealthResult): void {
     const state = this.states.get(id)!;
     const previous = state.health.status;
@@ -223,6 +244,11 @@ export class ReliabilityManager extends EventEmitter {
     }
   }
 
+  /**
+   * Perform a health check for a component.
+   * @param id The component ID.
+   * @returns The result of the health check.
+   */
   private async healthCheck(id: string): Promise<HealthResult> {
     const component = this.registrations.get(id)!.component;
     const controller = new AbortController();
@@ -234,10 +260,19 @@ export class ReliabilityManager extends EventEmitter {
         controller.signal.addEventListener('abort', () => reject(new OperationTimeoutError('health')), { once: true });
       });
       result = await Promise.race([component.checkHealth(controller.signal), timeoutPromise]);
-      if (!(result.status in healthValues)) throw new Error('Invalid health result');
-      result = { ...result, checkedAt: new Date().toISOString() };
+      if (!(result.status in healthValues)) {
+        throw new Error('Invalid health result');
+      }
+      result = {
+        ...result,
+        checkedAt: new Date().toISOString()
+      };
     } catch (error) {
-      result = { status: 'UNHEALTHY', reason: describe(error), checkedAt: new Date().toISOString() };
+      result = {
+        status: 'UNHEALTHY',
+        reason: describe(error),
+        checkedAt: new Date().toISOString()
+      };
     } finally {
       clearTimeout(timeout);
       controller.abort();
@@ -247,6 +282,10 @@ export class ReliabilityManager extends EventEmitter {
     return result;
   }
 
+  /**
+   * Check the health of a single component and trigger recovery if necessary.
+   * @param id The component ID.
+   */
   private async checkOne(id: string): Promise<void> {
     if (this.stopping || this.checking.has(id) || this.recovering.has(id)) return;
     if (this.states.get(id)?.lifecycle !== 'RUNNING') return;
@@ -262,12 +301,20 @@ export class ReliabilityManager extends EventEmitter {
     }
   }
 
+  /**
+   * Check the health of all registered components.
+   */
   async checkAll(): Promise<void> {
     await Promise.all([...this.registrations.keys()].map(id => this.checkOne(id)));
   }
 
+  /**
+   * Start the manager and all registered components.
+   */
   async start(): Promise<void> {
-    if (this.active || this.stopping) throw new Error('Manager already started or stopping');
+    if (this.active || this.stopping) {
+      throw new Error('Manager already started or stopping');
+    }
     this.active = true;
 
     for (const [id, registration] of this.registrations) {
@@ -283,7 +330,9 @@ export class ReliabilityManager extends EventEmitter {
         this.lifecycle(id, 'RUNNING');
         await this.healthCheck(id);
       } catch (error) {
-        if (error instanceof OperationTimeoutError) this.event(id, 'operation.timeout', 'start');
+        if (error instanceof OperationTimeoutError) {
+          this.event(id, 'operation.timeout', 'start');
+        }
         if (this.stopping) break;
         this.updateHealth(id, {
           status: 'UNHEALTHY',
@@ -301,6 +350,11 @@ export class ReliabilityManager extends EventEmitter {
     this.monitor.unref();
   }
 
+  /**
+   * Attempt to recover a component.
+   * @param id The component ID.
+   * @returns A promise that resolves when recovery is complete.
+   */
   recover(id: string): Promise<void> {
     const existing = this.recovering.get(id);
     if (existing) return existing;
@@ -330,6 +384,13 @@ export class ReliabilityManager extends EventEmitter {
     return task;
   }
 
+  /**
+   * Execute the recovery process for a component according to its policy.
+   * @param id The component ID.
+   * @param component The managed component.
+   * @param policy The recovery policy.
+   * @returns A promise that resolves when recovery is complete.
+   */
   private async runRecovery(
     id: string,
     component: ManagedComponent,
@@ -415,6 +476,10 @@ export class ReliabilityManager extends EventEmitter {
     }
   }
 
+  /**
+   * Get the current status of all components.
+   * @returns An array of component statuses.
+   */
   statuses(): ComponentStatus[] {
     return [...this.states.values()].map(state => ({
       ...state,
@@ -424,10 +489,19 @@ export class ReliabilityManager extends EventEmitter {
     }));
   }
 
+  /**
+   * Get recent events since a given sequence number.
+   * @param since The sequence number to start from.
+   * @returns An array of recent events.
+   */
   recentEvents(since = 0): ReliabilityEvent[] {
     return this.events.filter(event => event.sequence > since).map(event => ({ ...event }));
   }
 
+  /**
+   * Get the readiness status of the system.
+   * @returns An object indicating overall readiness and the status of critical components.
+   */
   readiness(): { ready: boolean; components: Array<{ id: string; lifecycle: LifecycleStatus; health: HealthStatus }> } {
     const critical = this.statuses().filter(state => state.critical);
     return {
@@ -440,7 +514,10 @@ export class ReliabilityManager extends EventEmitter {
     };
   }
 
-  /** Reentrant calls share the same shutdown promise. */
+  /**
+   * Reentrant calls share the same shutdown promise.
+   * @returns A promise that resolves with the shutdown result.
+   */
   stop(): Promise<ShutdownResult> {
     if (this.shutdownTask) return this.shutdownTask;
     this.stopping = true;
@@ -448,6 +525,10 @@ export class ReliabilityManager extends EventEmitter {
     return this.shutdownTask;
   }
 
+  /**
+   * Perform the shutdown sequence for all components.
+   * @returns A promise that resolves with the shutdown result.
+   */
   private async shutdown(): Promise<ShutdownResult> {
     if (this.monitor) clearInterval(this.monitor);
     this.monitor = undefined;

@@ -68,6 +68,10 @@ export class RecoveryGuard {
     }
   }
 
+  /**
+   * Remove outdated attempts from the rolling window.
+   * @param now The current time in milliseconds.
+   */
   private prune(now: number): void {
     this.attempts = this.attempts.filter(at => now - at < this.limits.budgetWindowMs);
   }
@@ -75,6 +79,7 @@ export class RecoveryGuard {
   /**
    * Reserve a recovery attempt. Even unsuccessful recovery calls consume budget.
    * Half-open permits exactly one probe.
+   * @returns A decision indicating whether a recovery attempt is allowed.
    */
   acquire(): RecoveryDecision {
     const now = this.now();
@@ -113,6 +118,10 @@ export class RecoveryGuard {
     return { allowed: true };
   }
 
+  /**
+   * Mark the last recovery attempt as successful.
+   * This will reset the circuit and probe state on success.
+   */
   succeeded(): void {
     this.failures = 0;
     this.circuit = 'CLOSED';
@@ -121,6 +130,10 @@ export class RecoveryGuard {
     // Do not clear budget: success does not refund resource expenditure.
   }
 
+  /**
+   * Mark the last recovery attempt as failed.
+   * This will increment the failure count and potentially open the circuit if thresholds are exceeded.
+   */
   failed(): void {
     this.failures++;
     this.probeInProgress = false;
@@ -134,6 +147,10 @@ export class RecoveryGuard {
     }
   }
 
+  /**
+   * Return a snapshot of the current recovery guard state.
+   * @returns The current state of the recovery guard.
+   */
   snapshot(): RecoveryGuardSnapshot {
     const now = this.now();
     this.prune(now);
