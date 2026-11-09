@@ -1,3 +1,29 @@
+## Config-driven ARM Runtime
+
+For most Node.js apps, prefer `createArmRuntime(config)` and let the library
+own metrics collection, component lifecycle, HTTP/WS metrics and optional
+Supervisor registration:
+
+```ts
+import { createArmRuntime } from 'base-arm-app';
+
+const arm = createArmRuntime({
+  components: [],
+  metrics: { server: { port: 3101 } },
+  supervisor: process.env.SUPERVISOR_REGISTRATION_TOKEN ? {
+    applicationId: 'my-service',
+    instanceId: `pid-${process.pid}`,
+    supervisorUrl: 'http://127.0.0.1:3200',
+    token: process.env.SUPERVISOR_REGISTRATION_TOKEN,
+  } : undefined,
+});
+await arm.start();
+// Host application retains responsibility for SIGTERM / SIGINT and calls arm.stop().
+```
+
+See [ARM Runtime configuration guide](docs/ARM_RUNTIME.md). Advanced consumers
+can still use the individual classes.
+
 # ARM Client Library Branch
 
 **This branch contains only in-process ARM components.** To build a local npm

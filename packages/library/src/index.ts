@@ -12,3 +12,6 @@ export { ReconnectableResource } from '../../adapters/src/reconnectable-resource
 export type { ResourceSession, ResourceFactory, ReconnectableResourceOptions } from '../../adapters/src/reconnectable-resource.js';
 export { ApplicationRegistrationClient } from './application-registration-client.js';
 export type { ApplicationRegistration, RegistrationClientOptions, RegistrationErrorHandler } from './application-registration-client.js';
+
+export { ArmRuntime, createArmRuntime } from './arm-runtime.js';
+export type { ArmRuntimeConfig, ArmRuntimeStatus } from './arm-runtime.js';
