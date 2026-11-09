@@ -1,3 +1,16 @@
+# ARM Client Library Branch
+
+**This branch contains only in-process ARM components.** To build a local npm
+package for another Node.js project, see [Client Library Guide](docs/CLIENT_LIBRARY.md).
+
+```bash
+npm install
+npm run pack:client
+cd packages/library && npm pack
+```
+
+---
+
 # base-arm-app — Application Reliability Manager (Phase 4)
 
 Reusable process-local Application Reliability Manager components implemented in TypeScript. Includes HTTP JSON and WebSocket reporting; no user interface.
