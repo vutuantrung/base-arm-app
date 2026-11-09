@@ -142,18 +142,11 @@ export class ReliabilityManager extends EventEmitter {
     }
 
     const { component, recovery } = registration;
-    if (!VALID_ID_PATTERN.test(component.id) || this.registrations.has(component.id)) {
+    if (this.isInvalidComponentId(component.id)) {
       throw new Error('Invalid or duplicate component id');
     }
 
-    if (
-      !Number.isInteger(recovery.maxAttempts)
-      || recovery.maxAttempts < 0
-      || ![recovery.baseDelayMs, recovery.maxDelayMs, recovery.timeoutMs].every(Number.isFinite)
-      || recovery.baseDelayMs < 0
-      || recovery.maxDelayMs < recovery.baseDelayMs
-      || recovery.timeoutMs < 1
-    ) {
+    if (this.isInvalidRecoveryPolicy(recovery)) {
       throw new Error('Invalid recovery policy');
     }
 
@@ -168,6 +161,22 @@ export class ReliabilityManager extends EventEmitter {
       operationPending: false,
     });
     this.publishMetrics(component.id);
+  }
+
+  private isInvalidComponentId(id: string): boolean {
+    return !VALID_ID_PATTERN.test(id) || this.registrations.has(id);
+  }
+
+  private isInvalidRecoveryPolicy(policy: RecoveryPolicy): boolean {
+    const { maxAttempts, baseDelayMs, maxDelayMs, timeoutMs } = policy;
+    const hasInvalidNumber = ![baseDelayMs, maxDelayMs, timeoutMs].every(Number.isFinite);
+
+    return !Number.isInteger(maxAttempts)
+      || maxAttempts < 0
+      || hasInvalidNumber
+      || baseDelayMs < 0
+      || maxDelayMs < baseDelayMs
+      || timeoutMs < 1;
   }
 
   /**

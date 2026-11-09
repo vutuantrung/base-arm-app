@@ -48,3 +48,40 @@ test('API component snapshot and WS event stream',async()=>{
     assert.ok((await (await fetch(url+'/reliability/events')).json()).events.length>0);
   }finally{ws.terminate();await arm.stop();await server.stop();}
 });
+
+test('registration validation rejects invalid identifiers and recovery limits', () => {
+  const registry = new MetricsRegistry();
+  const arm = new ReliabilityManager(registry);
+  const component: ManagedComponent = {
+    id: 'valid-worker',
+    async start() {},
+    async stop() {},
+    async checkHealth() {
+      return { status: 'HEALTHY', checkedAt: new Date().toISOString() };
+    },
+  };
+
+  assert.throws(
+    () => arm.register({
+      component: { ...component, id: '!invalid' },
+      critical: false,
+      recovery: policy,
+    }),
+    /Invalid or duplicate component id/,
+  );
+
+  assert.throws(
+    () => arm.register({
+      component,
+      critical: true,
+      recovery: { ...policy, timeoutMs: 0 },
+    }),
+    /Invalid recovery policy/,
+  );
+
+  arm.register({ component, critical: true, recovery: policy });
+  assert.throws(
+    () => arm.register({ component, critical: false, recovery: policy }),
+    /Invalid or duplicate component id/,
+  );
+});
