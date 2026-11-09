@@ -9,6 +9,7 @@ self-registered external applications. Such applications are monitor-only.
 
 - [Process Supervisor](docs/PROCESS_SUPERVISOR.md)
 - [Dynamic Registration](docs/DYNAMIC_REGISTRATION.md)
+- [Application Discovery & Lifecycle State](docs/APPLICATION_DISCOVERY.md)
 - In-process-only package: use the separate `arm-client` branch
 
 ---

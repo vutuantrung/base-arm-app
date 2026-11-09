@@ -15,6 +15,8 @@ const server = new ApplicationRegistrationServer(registry, collector, {
 collector.on('connected', ({ id }) => console.log('Metrics connected:', id));
 collector.on('disconnected', ({ id }) => console.log('Metrics disconnected:', id));
 registry.on('registered', ({ id }) => console.log('Registered:', id));
+registry.on('state_changed', ({ id, previous, current }) =>
+  console.log(`Discovery state ${id}: ${previous} -> ${current}`));
 
 collector.start();
 await server.start();

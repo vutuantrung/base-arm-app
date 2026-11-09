@@ -11,6 +11,8 @@ export interface RemoteArmTarget {
 export interface RemoteMetricsState {
   id: string;
   connected: boolean;
+  connectedAt?: string;
+  disconnectedAt?: string;
   lastSnapshotAt?: string;
   lastEventAt?: string;
   metrics: Metric[];
@@ -27,6 +29,8 @@ export class RemoteArmMetricsCollector extends EventEmitter {
   private readonly reconnectTimers = new Map<string, NodeJS.Timeout>();
   private readonly generations = new Map<string, number>();
   private running = false;
+
+  get freshnessMs(): number { return this.maxAgeMs; }
   private readonly targets = new Map<string, RemoteArmTarget>();
 
   constructor(
@@ -43,6 +47,7 @@ export class RemoteArmMetricsCollector extends EventEmitter {
     const previous = this.targets.get(target.id);
     if (previous?.metricsUrl === target.metricsUrl && previous?.metricsToken === target.metricsToken) return;
     this.disconnect(target.id);
+    this.states.delete(target.id); // A new endpoint cannot inherit its predecessor's snapshot.
     this.targets.set(target.id, { ...target });
     if (this.running) this.connect(target);
   }
@@ -94,10 +99,10 @@ export class RemoteArmMetricsCollector extends EventEmitter {
     return [...this.states.keys()].map(id => this.get(id)!);
   }
 
-  isFresh(id: string): boolean {
+  isFresh(id: string, now = Date.now()): boolean {
     const state = this.states.get(id);
     return !!state?.connected && !!state.lastSnapshotAt &&
-      Date.now() - new Date(state.lastSnapshotAt).getTime() <= this.maxAgeMs;
+      now - new Date(state.lastSnapshotAt).getTime() <= this.maxAgeMs;
   }
 
   private connect(spec: RemoteArmTarget): void {
@@ -131,6 +136,8 @@ export class RemoteArmMetricsCollector extends EventEmitter {
     ws.on('open', () => {
       if (!isCurrent()) return;
       state.connected = true;
+      state.connectedAt = new Date().toISOString();
+      state.disconnectedAt = undefined;
       state.lastError = undefined;
       ws.send(JSON.stringify({ action: 'subscribe' }));
       ws.send(JSON.stringify({ action: 'subscribe_events' }));
@@ -171,6 +178,7 @@ export class RemoteArmMetricsCollector extends EventEmitter {
     ws.on('close', () => {
       if (!isCurrent()) return;
       state.connected = false;
+      state.disconnectedAt = new Date().toISOString();
       if (this.connections.get(spec.id) === ws) this.connections.delete(spec.id);
       this.emit('disconnected', { id: spec.id });
       this.scheduleReconnect(spec, generation);

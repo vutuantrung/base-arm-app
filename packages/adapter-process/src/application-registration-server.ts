@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
-import type { ApplicationRegistry, ApplicationRegistration } from './application-registry.js';
+import type { ApplicationRegistry, ApplicationRegistration, ApplicationDiscoveryStatus, DiscoveryQuery } from './application-registry.js';
 import type { RemoteArmMetricsCollector } from './remote-arm-metrics-collector.js';
 
 export interface RegistrationServerOptions {
@@ -8,6 +8,10 @@ export interface RegistrationServerOptions {
   host?: string;
   port?: number;
 }
+
+const DISCOVERY_STATUSES = new Set<ApplicationDiscoveryStatus>([
+  'REGISTERED', 'CONNECTED', 'STALE', 'DISCONNECTED', 'EXPIRED',
+]);
 
 type UnregisterRequest = Pick<ApplicationRegistration, 'applicationId' | 'instanceId'>;
 
@@ -82,13 +86,22 @@ export class ApplicationRegistrationServer {
       return;
     }
 
-    const pathname = new URL(req.url ?? '/', 'http://localhost').pathname;
+    const url = new URL(req.url ?? '/', 'http://localhost');
+    const pathname = url.pathname;
     if (pathname === '/applications/register' && req.method === 'POST') {
       await this.handleRegistration(req, res);
       return;
     }
     if (pathname === '/applications' && req.method === 'GET') {
-      this.handleListApplications(res);
+      this.handleListApplications(url, res);
+      return;
+    }
+    if (pathname === '/applications/transitions' && req.method === 'GET') {
+      sendJson(res, 200, { transitions: this.registry.recentTransitions() });
+      return;
+    }
+    if (req.method === 'GET' && pathname.startsWith('/applications/')) {
+      this.handleApplicationDetail(pathname, res);
       return;
     }
     if (pathname === '/applications/unregister' && req.method === 'POST') {
@@ -114,13 +127,50 @@ export class ApplicationRegistrationServer {
     sendJson(res, 200, { registration });
   }
 
-  private handleListApplications(res: ServerResponse): void {
-    const applications = this.registry.list().map(app => ({
+  private parseDiscoveryQuery(url: URL): DiscoveryQuery {
+    const rawStatus = url.searchParams.get('status');
+    if (rawStatus && !DISCOVERY_STATUSES.has(rawStatus as ApplicationDiscoveryStatus)) {
+      throw new Error('Invalid discovery status');
+    }
+    const includeExpired = url.searchParams.get('includeExpired');
+    if (includeExpired !== null && includeExpired !== 'true' && includeExpired !== 'false') {
+      throw new Error('Invalid includeExpired flag');
+    }
+    const applicationId = url.searchParams.get('applicationId') ?? undefined;
+    return {
+      ...(rawStatus ? { status: rawStatus as ApplicationDiscoveryStatus } : {}),
+      ...(applicationId ? { applicationId } : {}),
+      includeExpired: includeExpired === 'true' || rawStatus === 'EXPIRED',
+    };
+  }
+
+  private handleListApplications(url: URL, res: ServerResponse): void {
+    const query = this.parseDiscoveryQuery(url);
+    const applications = this.registry.list(query).map(app => ({
       ...app,
       monitoring: this.collector.get(app.id) ?? null,
       fresh: this.collector.isFresh(app.id),
     }));
     sendJson(res, 200, { applications });
+  }
+
+  private handleApplicationDetail(pathname: string, res: ServerResponse): void {
+    const match = /^\/applications\/([^/]+)\/instances\/([^/]+)$/.exec(pathname);
+    if (!match) {
+      sendJson(res, 404, { error: 'not_found' });
+      return;
+    }
+    const id = `${match[1]}/${match[2]}`;
+    const application = this.registry.get(id);
+    if (!application) {
+      sendJson(res, 404, { error: 'not_found' });
+      return;
+    }
+    sendJson(res, 200, {
+      application,
+      monitoring: this.collector.get(id) ?? null,
+      fresh: this.collector.isFresh(id),
+    });
   }
 
   private async handleUnregister(req: IncomingMessage, res: ServerResponse): Promise<void> {
