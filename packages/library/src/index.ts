@@ -10,3 +10,5 @@ export { MetricsServer } from '../../adapter-http/src/server.js';
 export type { MetricsServerOptions } from '../../adapter-http/src/server.js';
 export { ReconnectableResource } from '../../adapters/src/reconnectable-resource.js';
 export type { ResourceSession, ResourceFactory, ReconnectableResourceOptions } from '../../adapters/src/reconnectable-resource.js';
+export { ApplicationRegistrationClient } from './application-registration-client.js';
+export type { ApplicationRegistration, RegistrationClientOptions, RegistrationErrorHandler } from './application-registration-client.js';

@@ -90,3 +90,13 @@ Integration scenarios: `tests/integration-reliability.test.ts`.
 See [Phase 5 instructions](docs/PHASE_5_INTEGRATION_TESTING.md).
 
 To run: `npm install && npm run build && npm test`.
+
+## Optional Supervisor self-registration
+
+The library exports `ApplicationRegistrationClient` for independently started
+Node.js apps to register with an ARM Supervisor and periodically renew their
+monitoring lease. It does **not** include Supervisor process management.
+
+See [Client self-registration guide](docs/APPLICATION_REGISTRATION_CLIENT.md).
+Start registration **after** the application ARM `MetricsServer` starts.
+

@@ -50,3 +50,9 @@ npm test
 The build creates JavaScript and TypeScript declarations. The pack script
 constructs a standalone library distribution folder from the compiled
 `dist/packages` hierarchy, retaining the original relative module paths.
+
+## Optional self-registration
+
+Use `ApplicationRegistrationClient` after `MetricsServer.start()` to register an
+independently started Node.js app with the Supervisor, without bundling the
+Supervisor process manager. [Integration guide](APPLICATION_REGISTRATION_CLIENT.md).

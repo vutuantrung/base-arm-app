@@ -13,7 +13,7 @@ ARM Client là thư viện **chạy bên trong cùng process Node.js** với ứ
 - Phát hành metrics, readiness, trạng thái component và reliability events qua HTTP/WebSocket.
 - Giới hạn recovery bằng retry/backoff, retry budget, circuit breaker, timeout và operation fencing.
 
-**Không bao gồm trong `arm-client`:** `ProcessManager`, detached process supervision, application discovery, self-registration với Supervisor, remote metrics collector, tự khởi động lại Node.js process. Các chức năng Supervisor nằm ở nhánh `arm-supervisor` và phải được tích hợp riêng nếu cần.
+**Không bao gồm trong `arm-client`:** `ProcessManager`, detached process supervision, application discovery server, remote metrics collector, tự khởi động lại Node.js process. Các chức năng Supervisor nằm ở nhánh `arm-supervisor` và phải được tích hợp riêng nếu cần.
 
 ```mermaid
 flowchart TB
@@ -400,9 +400,30 @@ sequenceDiagram
 
 ## 8. Tích hợp ARM với Supervisor (tùy chọn)
 
-`arm-client` có thể expose `/metrics/ws` để một Supervisor kết nối và nhận telemetry. Nhưng package `arm-client` **không** tự gửi registration heartbeat tới Supervisor. Logic `ApplicationRegistrationClient` hiện nằm trong nhánh `arm-supervisor`.
+`arm-client` hiện **có** `ApplicationRegistrationClient` trong public API
+để app tự đăng ký với Supervisor theo Cách B. App khởi động `MetricsServer`
+trước, sau đó gọi `registration.start()` để gửi registration heartbeat.
 
-Nếu muốn **App tự đăng ký theo Cách B**, cần chọn một trong hai hướng phát triển tiếp theo: trích riêng registration client thành package dùng chung, hoặc bổ sung một adapter registration nhỏ cho ARM Client với public API ổn định. Tránh copy cả ProcessManager và Supervisor server vào package client chỉ để có registration.
+```ts
+import { ApplicationRegistrationClient } from 'base-arm-app';
+
+const registration = new ApplicationRegistrationClient({
+  applicationId: 'orders-api',
+  instanceId: `pid-${process.pid}`,
+  metricsUrl: 'ws://127.0.0.1:3101/metrics/ws',
+  supervisorUrl: 'http://127.0.0.1:3200',
+  token: process.env.SUPERVISOR_REGISTRATION_TOKEN!,
+});
+
+registration.start(error => console.warn('Registration retry scheduled:', error));
+// During shutdown: registration.stop();
+```
+
+Supervisor vẫn chịu trách nhiệm ApplicationRegistry/Discovery và mở WebSocket
+kết nối đến client. `ApplicationRegistrationClient` **không** chứa
+`ProcessManager` và không cho phép Supervisor restart app chỉ bằng thao tác
+đăng ký. Xem [APPLICATION_REGISTRATION_CLIENT.md](APPLICATION_REGISTRATION_CLIENT.md)
+để biết đầy đủ lifecycle, bảo mật và hướng dẫn triển khai.
 
 ## 9. Checklist tích hợp và kiểm thử
 
@@ -427,7 +448,7 @@ Nếu muốn **App tự đăng ký theo Cách B**, cần chọn một trong hai 
 3. **Health coverage:** mỗi adapter phải triển khai health checks đúng bản chất resource; ARM không tự phát hiện mọi lỗi nghiệp vụ.
 4. **Recovery isolation:** một async operation không hợp tác cancellation có thể tiếp tục chạy sau timeout; xem `OperationContext`.
 5. **Process failure:** ARM Client không thể tự phục hồi chính process đã chết.
-6. **Supervisor registration:** client-side self-registration chưa nằm trong public API nhánh Client; cần một package/adapter chung để tránh coupling hai nhánh.
+6. **Supervisor registration:** client-side self-registration đã có qua `ApplicationRegistrationClient`; Server-side discovery/process control chỉ có trên `arm-supervisor`.
 7. **Security:** REST/WS server sử dụng Bearer token đơn giản, mặc định loopback; chưa phải đầy đủ mTLS/RBAC/rate limiting cho internet exposure.
 
 ### Tài liệu source liên quan
