@@ -1,3 +1,18 @@
+# ARM Supervisor Branch
+
+This branch contains the **Supervisor implementation**:
+detached ProcessManager, remote ARM WebSocket metrics collection,
+and dynamic registration of independently started ARM-enabled apps.
+
+The Supervisor does not automatically take process ownership of
+self-registered external applications. Such applications are monitor-only.
+
+- [Process Supervisor](docs/PROCESS_SUPERVISOR.md)
+- [Dynamic Registration](docs/DYNAMIC_REGISTRATION.md)
+- In-process-only package: use the separate `arm-client` branch
+
+---
+
 # base-arm-app — Application Reliability Manager (Phase 4)
 
 Reusable process-local Application Reliability Manager components implemented in TypeScript. Includes HTTP JSON and WebSocket reporting; no user interface.
