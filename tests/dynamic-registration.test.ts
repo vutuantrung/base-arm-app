@@ -85,6 +85,28 @@ test('registration authentication and endpoint validation', async () => {
     body: JSON.stringify({ applicationId: 'orders', instanceId: 'one', metricsUrl }),
   });
   try {
+    const malformed = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: 'Bearer secret',
+      },
+      body: JSON.stringify({ applicationId: 'orders', instanceId: 123 }),
+    });
+    assert.equal(malformed.status, 400, 'Malformed registration must not reach registry');
+
+    const unregisterMalformed = await fetch(
+      `http://127.0.0.1:${address.port}/applications/unregister`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer secret',
+        },
+        body: JSON.stringify({ applicationId: 'orders' }),
+      },
+    );
+    assert.equal(unregisterMalformed.status, 400);
     assert.equal((await request('wrong', 'ws://127.0.0.1:3100/metrics/ws')).status, 401);
     assert.equal((await request('secret', 'ws://169.254.169.254:3100/metrics/ws')).status, 400);
     assert.equal((await request('secret', 'ws://127.0.0.1:3100/metrics/ws')).status, 200);
