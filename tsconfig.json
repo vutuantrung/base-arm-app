@@ -1,4 +1,24 @@
 {
-  "compilerOptions": {"target": "ES2022", "module": "NodeNext", "moduleResolution": "NodeNext", "lib": ["ES2022"], "strict": true, "esModuleInterop": true, "skipLibCheck": true, "outDir": "dist", "rootDir": ".", "types": ["node"]},
-  "include": ["packages/**/*.ts", "examples/**/*.ts", "tests/**/*.ts"]
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": [
+      "ES2022"
+    ],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "rootDir": ".",
+    "types": [
+      "node"
+    ],
+    "declaration": true
+  },
+  "include": [
+    "packages/**/*.ts",
+    "examples/**/*.ts",
+    "tests/**/*.ts"
+  ]
 }

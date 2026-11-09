@@ -1,0 +1,18 @@
+{
+  "name": "base-arm-app",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "ARM client-side reliability and metrics library",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
