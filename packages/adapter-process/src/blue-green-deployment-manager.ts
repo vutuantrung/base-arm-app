@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ProcessManager, type ProcessView } from './process-manager.js';
+import { ArmRuntimeInjector } from './arm-runtime-injector.js';
 import { ApplicationStorage } from './deployment/application-storage.js';
 import { BlueGreenHttpProxy, type ProxyTarget } from './blue-green-http-proxy.js';
 
@@ -25,6 +26,7 @@ export interface BlueGreenOptions {
   healthPath?: string;
   healthTimeoutMs?: number;
   drainTimeoutMs?: number;
+  injector?: ArmRuntimeInjector;
 }
 
 const APP_ID = /^[A-Za-z][A-Za-z0-9_.-]{0,55}$/;
@@ -58,7 +60,7 @@ export class BlueGreenDeploymentManager {
     }
     this.ports = { blue: options.bluePort, green: options.greenPort };
     this.storage = new ApplicationStorage(options.storageRoot);
-    this.processes = new ProcessManager(join(this.storage.root, 'state', 'blue-green-processes.json'));
+    this.processes = new ProcessManager(join(this.storage.root, 'state', 'blue-green-processes.json'), options.injector);
     this.proxy = new BlueGreenHttpProxy(options.proxyPort);
     this.filename = join(this.storage.root, 'applications', options.applicationId, 'blue-green.json');
     this.healthPath = options.healthPath ?? '/health';

@@ -6,13 +6,25 @@ import { RuntimeStateStore } from '../../../packages/adapter-process/src/runtime
 import { ApplicationReleaseManager } from '../../../packages/adapter-process/src/application-release-manager.js';
 import { SafeRolloutManager } from '../../../packages/adapter-process/src/safe-rollout-manager.js';
 import { BlueGreenDeploymentManager } from '../../../packages/adapter-process/src/blue-green-deployment-manager.js';
+import { ArmRuntimeInjector } from '../../../packages/adapter-process/src/arm-runtime-injector.js';
+import { ArmTelemetryReader } from '../../../packages/adapter-process/src/arm-telemetry-reader.js';
+import { join } from 'node:path';
 
 async function main(): Promise<void> {
   const token = process.env.ARM_MANAGEMENT_TOKEN;
   if (!token) throw new Error('Set ARM_MANAGEMENT_TOKEN (at least 16 characters)');
   const storageRoot = resolve(process.env.ARM_DEPLOYMENT_ROOT ?? './supervisor-data');
+  const injectionEnabled = process.env.ARM_AUTO_INJECT === '1';
+  const telemetryRoot = join(storageRoot, 'telemetry');
+  const injector = injectionEnabled ? new ArmRuntimeInjector({
+    mode: 'automatic',
+    telemetryRoot,
+    sampleIntervalMs: Number(process.env.ARM_TELEMETRY_INTERVAL_MS ?? 1000),
+  }) : undefined;
+  const telemetry = injectionEnabled ? new ArmTelemetryReader(telemetryRoot) : undefined;
   const lifecycle = new ApplicationLifecycleManager({
     storageRoot,
+    injector,
     metricsToken: process.env.ARM_METRICS_TOKEN,
   });
   await lifecycle.initialize();
@@ -37,6 +49,7 @@ async function main(): Promise<void> {
   const blueGreen = process.env.ARM_BLUE_GREEN_APP_ID
     ? new BlueGreenDeploymentManager({
         storageRoot,
+        injector,
         applicationId: process.env.ARM_BLUE_GREEN_APP_ID,
         proxyPort: Number(process.env.ARM_PROXY_PORT ?? 3400),
         bluePort: Number(process.env.ARM_BLUE_PORT ?? 3401),
@@ -49,6 +62,7 @@ async function main(): Promise<void> {
     releaseManager: releases,
     rolloutManager: rollout,
     blueGreenManager: blueGreen,
+    telemetryReader: telemetry,
     bearerToken: token,
     port: Number(process.env.ARM_MANAGEMENT_PORT ?? 3300),
   });

@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { readFile, rename, mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { ArmRuntimeInjector } from './arm-runtime-injector.js';
 
 export interface ProcessSpec {
   id: string;
@@ -67,7 +68,7 @@ export class ProcessManager extends EventEmitter {
   private initialized = false;
   private persistQueue: Promise<void> = Promise.resolve();
 
-  constructor(private readonly stateFile: string) {
+  constructor(private readonly stateFile: string, private readonly injector?: ArmRuntimeInjector) {
     super();
   }
 
@@ -220,9 +221,13 @@ export class ProcessManager extends EventEmitter {
   }
 
   private async launch(id: string, spec: ProcessSpec): Promise<ManagedProcessState> {
-      const child = spawn(process.execPath, [spec.entry, ...(spec.args ?? [])], {
+      const applicationId = spec.env?.ARM_APPLICATION_ID ?? spec.id;
+      const instanceId = spec.env?.ARM_INSTANCE_ID ?? spec.id;
+      const child = spawn(process.execPath, this.injector?.nodeArguments(spec.entry, spec.args) ??
+        [spec.entry, ...(spec.args ?? [])], {
         cwd: spec.cwd,
-        env: { ...process.env, ...spec.env },
+        env: { ...process.env, ...spec.env,
+          ...this.injector?.environment(applicationId, instanceId) },
         detached: true,
         stdio: 'ignore',
         windowsHide: true,

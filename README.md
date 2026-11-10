@@ -1,3 +1,21 @@
+## Phase 8 — Supervisor-owned ARM runtime preload (opt-in)
+
+The Supervisor can inject a lightweight Node.js instrumentation runtime into new
+child processes **without modifying uploaded ZIP files or app dependencies**.
+
+```bash
+export ARM_MANAGEMENT_TOKEN='replace-with-a-long-random-secret'
+export ARM_AUTO_INJECT=1
+npm run dev:management
+```
+
+Runtime snapshots are stored at `supervisor-data/telemetry/<instanceId>.json` and
+can be read via `GET /runtime/instances/:id/telemetry` with the management token.
+
+This implements process and native HTTP diagnostics instrumentation; it **does not
+yet implement the complete arm-client SDK contract or business readiness**.
+See [Phase 8 guide](docs/PHASE_8_AUTO_RUNTIME_INJECTION.md).
+
 ## Phase 7 — Blue/Green HTTP deployment (opt-in)
 
 A stable localhost HTTP proxy routes to separate Blue/Green Node.js processes,

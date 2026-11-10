@@ -8,7 +8,7 @@
     "examples/*"
   ],
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b && node scripts/copy-runtime.mjs",
     "test": "node --import tsx --test tests/*.test.ts",
     "dev": "tsx watch examples/nodejs-api/src/index.ts",
     "dev:supervisor": "tsx examples/supervisor/src/index.ts",

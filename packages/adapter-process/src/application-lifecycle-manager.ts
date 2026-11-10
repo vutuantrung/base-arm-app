@@ -5,6 +5,7 @@ import { ApplicationStorage } from './deployment/application-storage.js';
 import { validateApplicationManifest } from './deployment/application-package-validator.js';
 import type { InstalledRelease } from './deployment/deployment-types.js';
 import { ProcessManager, type ProcessSpec, type ProcessView } from './process-manager.js';
+import { ArmRuntimeInjector } from './arm-runtime-injector.js';
 
 export interface ActiveRelease {
   applicationId: string;
@@ -30,6 +31,7 @@ export interface ApplicationLifecycleOptions {
   metricsToken?: string;
   /** Additional *trusted* environment values. No untrusted manifest env is executed. */
   env?: Record<string, string>;
+  injector?: ArmRuntimeInjector;
 }
 
 const APPLICATION_ID = /^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$/;
@@ -52,6 +54,7 @@ export class ApplicationLifecycleManager {
     this.storage = new ApplicationStorage(options.storageRoot);
     this.processes = new ProcessManager(
       options.processStateFile ?? join(this.storage.root, 'state', 'processes.json'),
+      options.injector,
     );
   }
 

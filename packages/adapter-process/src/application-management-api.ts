@@ -8,6 +8,7 @@ import { Transform } from 'node:stream';
 import type { ApplicationReleaseManager } from './application-release-manager.js';
 import type { SafeRolloutManager } from './safe-rollout-manager.js';
 import type { BlueGreenDeploymentManager } from './blue-green-deployment-manager.js';
+import type { ArmTelemetryReader } from './arm-telemetry-reader.js';
 import { ApplicationRuntimeMonitor } from './application-runtime-monitor.js';
 
 export interface ApplicationManagementApiOptions {
@@ -19,6 +20,7 @@ export interface ApplicationManagementApiOptions {
   releaseManager?: ApplicationReleaseManager;
   rolloutManager?: SafeRolloutManager;
   blueGreenManager?: BlueGreenDeploymentManager;
+  telemetryReader?: ArmTelemetryReader;
 }
 
 /** Loopback-only administrative API with explicit bearer authentication. */
@@ -133,6 +135,16 @@ export class ApplicationManagementApi {
         const body = await this.readJsonBody(req);
         if (typeof body.version !== 'string') throw new Error('Invalid release version');
         this.respond(res, 200, await bg.deploy(body.version));
+        return;
+      }
+      const telemetryMatch = /^\/runtime\/instances\/([A-Za-z][A-Za-z0-9_.-]{0,63})\/telemetry$/.exec(pathname);
+      if (telemetryMatch && req.method === 'GET') {
+        if (!this.options.telemetryReader) {
+          this.respond(res, 404, { error: 'telemetry_disabled' });
+          return;
+        }
+        const snapshot = await this.options.telemetryReader.read(telemetryMatch[1]);
+        this.respond(res, snapshot ? 200 : 404, snapshot ?? { error: 'not_found' });
         return;
       }
       if (pathname === '/applications' && req.method === 'GET') {
