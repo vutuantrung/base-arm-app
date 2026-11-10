@@ -10,7 +10,7 @@ export interface ProcessSpec {
   cwd?: string;
   env?: Record<string, string>;
   /** ARM WebSocket endpoint provided by the child app. */
-  metricsUrl: string;
+  metricsUrl?: string;
   /** Bearer token if its ARM MetricsServer requires authentication. */
   metricsToken?: string;
 }
@@ -75,10 +75,8 @@ export class ProcessManager extends EventEmitter {
     if (this.initialized) throw new Error('ProcessManager already initialized');
     const ids = new Set<string>();
     for (const spec of specs) {
-      if (!/^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$/.test(spec.id) || ids.has(spec.id)) {
-        throw new Error(`Invalid or duplicate process id: ${spec.id}`);
-      }
-      if (!spec.entry || !spec.metricsUrl) throw new Error('entry and metricsUrl are required');
+      this.validateSpec(spec);
+      if (ids.has(spec.id)) throw new Error(`Duplicate process id: ${spec.id}`);
       ids.add(spec.id);
       this.specs.set(spec.id, spec);
     }
@@ -98,6 +96,45 @@ export class ProcessManager extends EventEmitter {
     }
     this.initialized = true;
     await this.reconcile();
+  }
+
+  /**
+   * Add an installed release without restarting the Supervisor.
+   * A different specification can replace the previous one only if stopped.
+   */
+  async registerSpec(spec: ProcessSpec): Promise<void> {
+    this.assertInitialized();
+    this.validateSpec(spec);
+    await this.lock(spec.id, async () => {
+      const previous = this.specs.get(spec.id);
+      if (previous && JSON.stringify(previous) === JSON.stringify(spec)) return;
+      if (previous && (await this.inspectExistingProcess(spec.id))) {
+        throw new Error(`Cannot replace running process specification: ${spec.id}`);
+      }
+      this.specs.set(spec.id, { ...spec });
+    });
+  }
+
+  private async inspectExistingProcess(id: string): Promise<boolean> {
+    const state = this.states.get(id);
+    if (!state) return false;
+    if (await this.verify(state)) return true;
+    if (isAlive(state.pid)) {
+      throw new Error(`Unverified PID ${state.pid}; refusing spec replacement`);
+    }
+    this.states.delete(id);
+    await this.persist();
+    return false;
+  }
+
+  private validateSpec(spec: ProcessSpec): void {
+    if (!/^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$/.test(spec.id)) {
+      throw new Error(`Invalid process id: ${spec.id}`);
+    }
+    if (!spec.entry) throw new Error('entry is required');
+    if (spec.metricsUrl && !/^wss?:\/\//.test(spec.metricsUrl)) {
+      throw new Error('metricsUrl must be WebSocket URL');
+    }
   }
 
   async inspect(id: string): Promise<ProcessView> {

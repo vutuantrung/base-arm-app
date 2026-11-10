@@ -1,3 +1,22 @@
+## Phase 2 — Installed application lifecycle
+
+Installed ZIP applications can now be selected and managed by the Supervisor:
+
+```bash
+npm run deploy:zip -- ./supervisor-data/uploads/payment-service-1.0.0.zip
+npm run app:manage -- activate payment-service 1.0.0
+npm run app:manage -- start payment-service
+npm run app:manage -- inspect payment-service
+npm run app:manage -- restart payment-service
+npm run app:manage -- stop payment-service
+```
+
+Phase 2 keeps the selected release across Supervisor restarts and uses the
+existing safe `ProcessManager` PID verification. See
+[Phase 2 lifecycle guide](docs/PHASE_2_APPLICATION_PROCESS_LIFECYCLE.md).
+The Phase 1 payment-service fixture does not expose ARM health: its readiness
+status is `NOT_CONFIGURED`.
+
 # ARM Supervisor Branch
 
 This branch contains the **Supervisor implementation**:

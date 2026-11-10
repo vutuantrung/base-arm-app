@@ -13,7 +13,8 @@
     "dev": "tsx watch examples/nodejs-api/src/index.ts",
     "dev:supervisor": "tsx examples/supervisor/src/index.ts",
     "dev:registration": "tsx examples/supervisor/src/registration.ts",
-    "deploy:zip": "tsx examples/supervisor/src/install-package.ts"
+    "deploy:zip": "tsx examples/supervisor/src/install-package.ts",
+    "app:manage": "tsx examples/supervisor/src/manage-app.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
