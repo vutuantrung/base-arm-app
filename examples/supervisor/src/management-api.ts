@@ -4,6 +4,7 @@ import { ApplicationRuntimeMonitor } from '../../../packages/adapter-process/src
 import { ApplicationManagementApi } from '../../../packages/adapter-process/src/application-management-api.js';
 import { RuntimeStateStore } from '../../../packages/adapter-process/src/runtime-state-store.js';
 import { ApplicationReleaseManager } from '../../../packages/adapter-process/src/application-release-manager.js';
+import { SafeRolloutManager } from '../../../packages/adapter-process/src/safe-rollout-manager.js';
 
 async function main(): Promise<void> {
   const token = process.env.ARM_MANAGEMENT_TOKEN;
@@ -27,14 +28,22 @@ async function main(): Promise<void> {
   monitor.on('process.completed', event => console.log('process.completed', event));
 
   const releases = new ApplicationReleaseManager(monitor, { storageRoot });
+  const rollout = new SafeRolloutManager(monitor, releases, storageRoot, {
+    stabilityWindowMs: Number(process.env.ARM_ROLLOUT_STABILITY_MS ?? 1500),
+  });
   const api = new ApplicationManagementApi(monitor, {
     releaseManager: releases,
+    rolloutManager: rollout,
     bearerToken: token,
     port: Number(process.env.ARM_MANAGEMENT_PORT ?? 3300),
   });
-  await api.start();
   await monitor.restoreRunningApplications();
+  const recovered = await rollout.recoverIncompleteRollouts();
+  for (const operation of recovered) {
+    console.log('[ARM rollout recovery]', operation.applicationId, operation.phase);
+  }
   monitor.startMonitoring();
+  await api.start();
   console.log('Supervisor management API listening at http://127.0.0.1:' +
     (process.env.ARM_MANAGEMENT_PORT ?? 3300));
   console.log('Use the management API to start apps and enable recovery tracking.');

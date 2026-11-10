@@ -1,3 +1,22 @@
+## Phase 6 — Transactional Deployment & Safe Rollout
+
+With the management daemon running, release switching can be executed as one
+checkpointed operation instead of separate stop / activate / start calls:
+
+```bash
+curl -X POST http://127.0.0.1:3300/applications/payment-service/rollout \
+  -H "Authorization: Bearer $ARM_MANAGEMENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"version":"1.1.0","allowProcessOnly":true}'
+```
+
+The `allowProcessOnly` flag is **only for test packages without ARM readiness**.
+Instrumented apps must reach healthy readiness and stay running through a
+stability window. A failed rollout attempts to restore the previous release.
+Supervisor startup replays interrupted journal entries conservatively.
+
+See [Phase 6 rollout guide](docs/PHASE_6_TRANSACTIONAL_DEPLOYMENT.md).
+
 ## Phase 5 — Deployment API & Release Management
 
 With the management daemon running, authorized localhost clients can install ZIP

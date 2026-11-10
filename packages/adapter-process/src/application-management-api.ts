@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Transform } from 'node:stream';
 import type { ApplicationReleaseManager } from './application-release-manager.js';
+import type { SafeRolloutManager } from './safe-rollout-manager.js';
 import { ApplicationRuntimeMonitor } from './application-runtime-monitor.js';
 
 export interface ApplicationManagementApiOptions {
@@ -15,6 +16,7 @@ export interface ApplicationManagementApiOptions {
   maxBodyBytes?: number;
   maxUploadBytes?: number;
   releaseManager?: ApplicationReleaseManager;
+  rolloutManager?: SafeRolloutManager;
 }
 
 /** Loopback-only administrative API with explicit bearer authentication. */
@@ -93,6 +95,31 @@ export class ApplicationManagementApi {
           : await this.options.releaseManager.listAudit(applicationId));
         return;
       }
+      const rolloutMatch = /^\/applications\/([A-Za-z][A-Za-z0-9_.-]{0,63})\/rollout$/.exec(pathname);
+      if (rolloutMatch) {
+        if (!this.options.rolloutManager) throw new Error('Rollout API unavailable');
+        const applicationId = rolloutMatch[1];
+        if (req.method === 'GET') {
+          const operation = await this.options.rolloutManager.getLatest(applicationId);
+          this.respond(res, operation ? 200 : 404, operation ?? { error: 'not_found' });
+          return;
+        }
+        if (req.method === 'POST') {
+          const body = await this.readJsonBody(req);
+          if (typeof body.version !== 'string' ||
+              (body.allowProcessOnly !== undefined && typeof body.allowProcessOnly !== 'boolean')) {
+            throw new Error('Invalid rollout request: version required, allowProcessOnly must be boolean');
+          }
+          const outcome = await this.options.rolloutManager.rollout(applicationId, {
+            version: body.version, allowProcessOnly: body.allowProcessOnly === true,
+          });
+          this.respond(res, outcome.phase === 'SUCCEEDED' ? 200 :
+            outcome.phase === 'ROLLED_BACK' ? 409 : 500, outcome);
+          return;
+        }
+        this.respond(res, 405, { error: 'method_not_allowed' });
+        return;
+      }
       if (pathname === '/applications' && req.method === 'GET') {
         this.respond(res, 200, await this.monitor.listApplications());
         return;
@@ -109,6 +136,10 @@ export class ApplicationManagementApi {
       }
       if (!action || req.method !== 'POST') {
         this.respond(res, 405, { error: 'method_not_allowed' });
+        return;
+      }
+      if (this.options.rolloutManager?.isBusy(id)) {
+        this.respond(res, 409, { error: 'rollout_in_progress' });
         return;
       }
       const body = await this.readJsonBody(req);

@@ -51,6 +51,7 @@ const DEFAULTS = {
 export class ApplicationRuntimeMonitor extends EventEmitter {
   private readonly tracked = new Map<string, TrackedApplication>();
   private readonly busy = new Set<string>();
+  private readonly recoveryPaused = new Set<string>();
   private readonly options: Required<RuntimeMonitoringOptions>;
   private interval?: NodeJS.Timeout;
   private closed = false;
@@ -109,6 +110,23 @@ export class ApplicationRuntimeMonitor extends EventEmitter {
         await this.persist(view.applicationId, state);
       }
     }
+  }
+
+  /** Prevent an automatic restart while a release transaction owns this app. */
+  async pauseRecovery(applicationId: string): Promise<void> {
+    this.recoveryPaused.add(applicationId);
+    const deadline = Date.now() + 10000;
+    while (this.busy.has(applicationId)) {
+      if (Date.now() >= deadline) {
+        this.recoveryPaused.delete(applicationId);
+        throw new Error('Timed out waiting for recovery lock: ' + applicationId);
+      }
+      await new Promise<void>(resolve => setTimeout(resolve, 20));
+    }
+  }
+
+  resumeRecovery(applicationId: string): void {
+    this.recoveryPaused.delete(applicationId);
   }
 
   startMonitoring(): void {
@@ -228,7 +246,7 @@ export class ApplicationRuntimeMonitor extends EventEmitter {
     this.assertOpen();
     const applications = await this.lifecycle.listApplications();
     for (const application of applications) {
-      if (this.busy.has(application.applicationId)) continue;
+      if (this.busy.has(application.applicationId) || this.recoveryPaused.has(application.applicationId)) continue;
       await this.withApplicationLock(application.applicationId, async () => {
         await this.observe(application.applicationId);
       });
