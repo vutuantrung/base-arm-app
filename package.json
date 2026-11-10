@@ -14,7 +14,8 @@
     "dev:supervisor": "tsx examples/supervisor/src/index.ts",
     "dev:registration": "tsx examples/supervisor/src/registration.ts",
     "deploy:zip": "tsx examples/supervisor/src/install-package.ts",
-    "app:manage": "tsx examples/supervisor/src/manage-app.ts"
+    "app:manage": "tsx examples/supervisor/src/manage-app.ts",
+    "dev:management": "tsx examples/supervisor/src/management-api.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

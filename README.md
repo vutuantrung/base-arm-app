@@ -1,3 +1,21 @@
+## Phase 3 — Runtime monitoring and recovery
+
+Run the management daemon after installing/activating an application:
+
+```bash
+export ARM_MANAGEMENT_TOKEN='replace-with-a-long-random-secret'
+npm run dev:management
+```
+
+The loopback management API supports authenticated list/inspect/activate/start/stop/restart operations.
+When started via the API, managed applications are monitored for unexpected process exits and
+restarted with bounded exponential backoff according to their manifest. Manual stop suppresses
+recovery. Process state and ARM readiness are separate.
+
+See [Phase 3 guide](docs/PHASE_3_APPLICATION_RUNTIME_MONITORING.md).
+Avoid using the standalone `app:manage` CLI concurrently with the management daemon
+against the same state files.
+
 ## Phase 2 — Installed application lifecycle
 
 Installed ZIP applications can now be selected and managed by the Supervisor:
