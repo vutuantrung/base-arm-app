@@ -1,5 +1,11 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
+import { createWriteStream } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { pipeline } from 'node:stream/promises';
+import { Transform } from 'node:stream';
+import type { ApplicationReleaseManager } from './application-release-manager.js';
 import { ApplicationRuntimeMonitor } from './application-runtime-monitor.js';
 
 export interface ApplicationManagementApiOptions {
@@ -7,6 +13,8 @@ export interface ApplicationManagementApiOptions {
   port?: number;
   bearerToken: string;
   maxBodyBytes?: number;
+  maxUploadBytes?: number;
+  releaseManager?: ApplicationReleaseManager;
 }
 
 /** Loopback-only administrative API with explicit bearer authentication. */
@@ -15,6 +23,7 @@ export class ApplicationManagementApi {
   private readonly host: string;
   private readonly port: number;
   private readonly maxBodyBytes: number;
+  private readonly maxUploadBytes: number;
 
   constructor(
     private readonly monitor: ApplicationRuntimeMonitor,
@@ -26,6 +35,7 @@ export class ApplicationManagementApi {
     this.host = options.host ?? '127.0.0.1';
     this.port = options.port ?? 3300;
     this.maxBodyBytes = options.maxBodyBytes ?? 4096;
+    this.maxUploadBytes = options.maxUploadBytes ?? 50 * 1024 * 1024;
     if (!['127.0.0.1', '::1'].includes(this.host)) {
       throw new Error('Management API must bind to loopback');
     }
@@ -64,11 +74,30 @@ export class ApplicationManagementApi {
     }
     try {
       const pathname = new URL(req.url ?? '/', 'http://localhost').pathname;
+      if (pathname === '/deployments/upload' && req.method === 'POST') {
+        if (!this.options.releaseManager) throw new Error('Deployment API unavailable');
+        this.respond(res, 201, await this.handleZipUpload(req));
+        return;
+      }
+      if (pathname === '/deployments/audit' && req.method === 'GET') {
+        if (!this.options.releaseManager) throw new Error('Deployment API unavailable');
+        this.respond(res, 200, await this.options.releaseManager.listAudit());
+        return;
+      }
+      const releasesMatch = /^\/applications\/([A-Za-z][A-Za-z0-9_.-]{0,63})\/(releases|audit)$/.exec(pathname);
+      if (releasesMatch && req.method === 'GET') {
+        if (!this.options.releaseManager) throw new Error('Deployment API unavailable');
+        const [, applicationId, resource] = releasesMatch;
+        this.respond(res, 200, resource === 'releases'
+          ? await this.options.releaseManager.listReleases(applicationId)
+          : await this.options.releaseManager.listAudit(applicationId));
+        return;
+      }
       if (pathname === '/applications' && req.method === 'GET') {
         this.respond(res, 200, await this.monitor.listApplications());
         return;
       }
-      const match = /^\/applications\/([A-Za-z][A-Za-z0-9_.-]{0,63})(?:\/(activate|start|stop|restart))?$/.exec(pathname);
+      const match = /^\/applications\/([A-Za-z][A-Za-z0-9_.-]{0,63})(?:\/(activate|rollback|start|stop|restart))?$/.exec(pathname);
       if (!match) {
         this.respond(res, 404, { error: 'not_found' });
         return;
@@ -86,12 +115,13 @@ export class ApplicationManagementApi {
       this.respond(res, 200, await this.executeAction(id, action, body));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      const invalid = /invalid|missing|body|version|required/i.test(message);
-      const conflict = /in progress|running|pending|already/i.test(message);
+      const tooLarge = /too large|size limit/i.test(message);
+      const invalid = /invalid|missing|body|version|required|not a zip|unsupported zip/i.test(message);
+      const conflict = /in progress|running|pending|already|cannot replace/i.test(message);
       const notFound = /not found|No active release|Unknown process/i.test(message);
-      this.respond(res, invalid ? 400 : conflict ? 409 : notFound ? 404 : 500,
-        { error: invalid ? 'bad_request' : conflict ? 'conflict' : notFound ? 'not_found' : 'internal_error',
-          message: invalid || conflict || notFound ? message : undefined });
+      this.respond(res, tooLarge ? 413 : invalid ? 400 : conflict ? 409 : notFound ? 404 : 500,
+        { error: tooLarge ? 'payload_too_large' : invalid ? 'bad_request' : conflict ? 'conflict' : notFound ? 'not_found' : 'internal_error',
+          message: tooLarge || invalid || conflict || notFound ? message : undefined });
     }
   }
 
@@ -101,12 +131,50 @@ export class ApplicationManagementApi {
     switch (action) {
       case 'activate':
         if (typeof body.version !== 'string') throw new Error('version is required');
-        await this.monitor.activateRelease(id, body.version);
+        if (this.options.releaseManager) {
+          await this.options.releaseManager.activateRelease(id, body.version);
+        } else {
+          await this.monitor.activateRelease(id, body.version);
+        }
+        return this.monitor.inspectApplication(id);
+      case 'rollback':
+        if (!this.options.releaseManager) throw new Error('Deployment API unavailable');
+        await this.options.releaseManager.rollbackRelease(id);
         return this.monitor.inspectApplication(id);
       case 'start': return this.monitor.startApplication(id);
       case 'stop': return this.monitor.stopApplication(id);
       case 'restart': return this.monitor.restartApplication(id);
       default: throw new Error('Invalid action');
+    }
+  }
+
+  private async handleZipUpload(req: IncomingMessage): Promise<unknown> {
+    const releases = this.options.releaseManager;
+    if (!releases) throw new Error('Deployment API unavailable');
+    if (req.headers['content-type'] !== 'application/zip') {
+      throw new Error('Invalid content-type: application/zip required');
+    }
+    const length = Number(req.headers['content-length'] ?? 0);
+    if (length > this.maxUploadBytes) throw new Error('Upload too large');
+    const { mkdir } = await import('node:fs/promises');
+    const directory = join(releases.deployments.storage.root, 'uploads');
+    await mkdir(directory, { recursive: true, mode: 0o700 });
+    const temporary = await mkdtemp(join(directory, 'incoming-'));
+    const archive = join(temporary, 'package.zip');
+    let received = 0;
+    const maxUploadBytes = this.maxUploadBytes;
+    const limiter = new Transform({
+      transform(chunk: Buffer, _encoding, callback) {
+        received += chunk.length;
+        if (received > maxUploadBytes) callback(new Error('Upload too large'));
+        else callback(null, chunk);
+      },
+    });
+    try {
+      await pipeline(req, limiter, createWriteStream(archive, { flags: 'wx', mode: 0o600 }));
+      return await releases.installZip(archive);
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
     }
   }
 

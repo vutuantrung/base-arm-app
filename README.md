@@ -1,3 +1,20 @@
+## Phase 5 — Deployment API & Release Management
+
+With the management daemon running, authorized localhost clients can install ZIP
+artifacts, list releases, activate a stopped app's release, roll back to a
+previously active release, and inspect the append-only deployment audit:
+
+```bash
+curl -X POST http://127.0.0.1:3300/deployments/upload \
+  -H "Authorization: Bearer $ARM_MANAGEMENT_TOKEN" \
+  -H "Content-Type: application/zip" \
+  --data-binary @payment-service-1.0.0.zip
+```
+
+See [Phase 5 deployment API guide](docs/PHASE_5_APPLICATION_DEPLOYMENT_API.md).
+Release switches require an already-stopped process. Uploading a ZIP does not
+automatically start the new application.
+
 ## Phase 4 — Durable Runtime State & Recovery Policies
 
 The management daemon now supplies a `RuntimeStateStore` to the monitor.

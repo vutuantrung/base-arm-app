@@ -3,6 +3,7 @@ import { ApplicationLifecycleManager } from '../../../packages/adapter-process/s
 import { ApplicationRuntimeMonitor } from '../../../packages/adapter-process/src/application-runtime-monitor.js';
 import { ApplicationManagementApi } from '../../../packages/adapter-process/src/application-management-api.js';
 import { RuntimeStateStore } from '../../../packages/adapter-process/src/runtime-state-store.js';
+import { ApplicationReleaseManager } from '../../../packages/adapter-process/src/application-release-manager.js';
 
 async function main(): Promise<void> {
   const token = process.env.ARM_MANAGEMENT_TOKEN;
@@ -25,7 +26,9 @@ async function main(): Promise<void> {
   monitor.on('recovery.exhausted', event => console.error('recovery.exhausted', event));
   monitor.on('process.completed', event => console.log('process.completed', event));
 
+  const releases = new ApplicationReleaseManager(monitor, { storageRoot });
   const api = new ApplicationManagementApi(monitor, {
+    releaseManager: releases,
     bearerToken: token,
     port: Number(process.env.ARM_MANAGEMENT_PORT ?? 3300),
   });
