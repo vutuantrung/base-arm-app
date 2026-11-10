@@ -1,3 +1,13 @@
+## Phase 4 — Durable Runtime State & Recovery Policies
+
+The management daemon now supplies a `RuntimeStateStore` to the monitor.
+Desired process state, recovery attempts and scheduled retries survive Supervisor
+restarts and are stored in `supervisor-data/applications/<id>/runtime-state.json`.
+An observed exit code 0 is treated as completion for `on-failure` policies.
+The retry budget resets only after a configurable stable-running period.
+
+See [Phase 4 guide](docs/PHASE_4_DURABLE_RUNTIME_STATE.md).
+
 ## Phase 3 — Runtime monitoring and recovery
 
 Run the management daemon after installing/activating an application:
