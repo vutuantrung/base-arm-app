@@ -7,6 +7,7 @@ import { pipeline } from 'node:stream/promises';
 import { Transform } from 'node:stream';
 import type { ApplicationReleaseManager } from './application-release-manager.js';
 import type { SafeRolloutManager } from './safe-rollout-manager.js';
+import type { BlueGreenDeploymentManager } from './blue-green-deployment-manager.js';
 import { ApplicationRuntimeMonitor } from './application-runtime-monitor.js';
 
 export interface ApplicationManagementApiOptions {
@@ -17,6 +18,7 @@ export interface ApplicationManagementApiOptions {
   maxUploadBytes?: number;
   releaseManager?: ApplicationReleaseManager;
   rolloutManager?: SafeRolloutManager;
+  blueGreenManager?: BlueGreenDeploymentManager;
 }
 
 /** Loopback-only administrative API with explicit bearer authentication. */
@@ -118,6 +120,19 @@ export class ApplicationManagementApi {
           return;
         }
         this.respond(res, 405, { error: 'method_not_allowed' });
+        return;
+      }
+      const bg = this.options.blueGreenManager;
+      if (pathname === '/blue-green' && req.method === 'GET') {
+        if (!bg) throw new Error('Blue/Green deployment is not configured');
+        this.respond(res, 200, bg.inspect());
+        return;
+      }
+      if (pathname === '/blue-green/deploy' && req.method === 'POST') {
+        if (!bg) throw new Error('Blue/Green deployment is not configured');
+        const body = await this.readJsonBody(req);
+        if (typeof body.version !== 'string') throw new Error('Invalid release version');
+        this.respond(res, 200, await bg.deploy(body.version));
         return;
       }
       if (pathname === '/applications' && req.method === 'GET') {

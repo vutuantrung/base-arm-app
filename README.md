@@ -1,3 +1,33 @@
+## Phase 7 — Blue/Green HTTP deployment (opt-in)
+
+A stable localhost HTTP proxy routes to separate Blue/Green Node.js processes,
+each with its own port and verified PID. New HTTP requests switch to a healthy
+candidate while in-flight requests drain on the previous backend.
+
+```bash
+export ARM_MANAGEMENT_TOKEN='replace-with-a-long-random-secret'
+export ARM_BLUE_GREEN_APP_ID='payment-service'
+export ARM_PROXY_PORT=3400
+export ARM_BLUE_PORT=3401
+export ARM_GREEN_PORT=3402
+npm run dev:management
+
+# Other terminal — both releases must already be installed:
+curl -X POST http://127.0.0.1:3300/blue-green/deploy \
+  -H "Authorization: Bearer $ARM_MANAGEMENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"version":"1.0.0"}'
+
+# Client-facing endpoint:
+curl http://127.0.0.1:3400/health
+```
+
+The one-time migration away from a direct-port singleton process requires
+maintenance. WebSocket upgrade migration and Supervisor-process restart with
+uninterrupted TCP connections are **not supported**.
+
+See [Phase 7 Blue/Green guide](docs/PHASE_7_ZERO_DOWNTIME_DEPLOYMENT.md).
+
 ## Phase 6 — Transactional Deployment & Safe Rollout
 
 With the management daemon running, release switching can be executed as one

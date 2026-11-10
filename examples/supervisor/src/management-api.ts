@@ -5,6 +5,7 @@ import { ApplicationManagementApi } from '../../../packages/adapter-process/src/
 import { RuntimeStateStore } from '../../../packages/adapter-process/src/runtime-state-store.js';
 import { ApplicationReleaseManager } from '../../../packages/adapter-process/src/application-release-manager.js';
 import { SafeRolloutManager } from '../../../packages/adapter-process/src/safe-rollout-manager.js';
+import { BlueGreenDeploymentManager } from '../../../packages/adapter-process/src/blue-green-deployment-manager.js';
 
 async function main(): Promise<void> {
   const token = process.env.ARM_MANAGEMENT_TOKEN;
@@ -31,9 +32,23 @@ async function main(): Promise<void> {
   const rollout = new SafeRolloutManager(monitor, releases, storageRoot, {
     stabilityWindowMs: Number(process.env.ARM_ROLLOUT_STABILITY_MS ?? 1500),
   });
+  // Phase 7 is opt-in and uses a distinct slot process registry and public proxy.
+  // Do not enable against a legacy app still bound to the public port.
+  const blueGreen = process.env.ARM_BLUE_GREEN_APP_ID
+    ? new BlueGreenDeploymentManager({
+        storageRoot,
+        applicationId: process.env.ARM_BLUE_GREEN_APP_ID,
+        proxyPort: Number(process.env.ARM_PROXY_PORT ?? 3400),
+        bluePort: Number(process.env.ARM_BLUE_PORT ?? 3401),
+        greenPort: Number(process.env.ARM_GREEN_PORT ?? 3402),
+      })
+    : undefined;
+  if (blueGreen) await blueGreen.initialize();
+
   const api = new ApplicationManagementApi(monitor, {
     releaseManager: releases,
     rolloutManager: rollout,
+    blueGreenManager: blueGreen,
     bearerToken: token,
     port: Number(process.env.ARM_MANAGEMENT_PORT ?? 3300),
   });
@@ -53,7 +68,10 @@ async function main(): Promise<void> {
     if (closing) return;
     closing = true;
     monitor.stopMonitoring();
-    void api.stop().finally(() => { monitor.close(); });
+    void api.stop().finally(async () => {
+      await blueGreen?.close();
+      monitor.close();
+    });
   };
   process.once('SIGINT', shutdown);
   process.once('SIGTERM', shutdown);
