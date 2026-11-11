@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ProcessManager, type ProcessView } from '../../process-manager/src/index.js';
-import { ArmRuntimeInjector } from './arm-runtime-injector.js';
+import { ArmRuntimeInjector } from '../../runtime-injection/src/index.js';
 import { ApplicationStorage } from '../../package-manager/src/index.js';
 import { ApplicationConfigurationStore } from './application-configuration-store.js';
 import { BlueGreenHttpProxy, type ProxyTarget } from '../../traffic-router/src/index.js';

@@ -5,7 +5,7 @@ import { ApplicationStorage } from '../../package-manager/src/index.js';
 import { validateApplicationManifest } from '../../package-manager/src/index.js';
 import type { InstalledRelease } from '../../package-manager/src/index.js';
 import { ProcessManager, type ProcessSpec, type ProcessView } from '../../process-manager/src/index.js';
-import { ArmRuntimeInjector } from './arm-runtime-injector.js';
+import { ArmRuntimeInjector } from '../../runtime-injection/src/index.js';
 import { ApplicationConfigurationStore } from './application-configuration-store.js';
 
 export interface ActiveRelease {

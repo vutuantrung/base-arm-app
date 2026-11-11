@@ -38,10 +38,12 @@ test('Phase 9 bridge configuration validates independent credentials and safe sc
   assert.equal(injector.nodeArguments('/tmp/service.js', [], 'payment-service')[0], '--import');
   assert.match(injector.nodeArguments('/tmp/service.js', [], 'payment-service')[1], /bridge-bootstrap\.mjs$/);
   assert.match(injector.nodeArguments('/tmp/other.js', [], 'another-service')[1], /bootstrap\.mjs$/);
-  if (existsSync(resolve('dist/packages/library/src/arm-runtime.js'))) {
+  const canonicalSdk = resolve('dist/packages/arm-client-sdk/src/arm-runtime.js');
+  const legacySdk = resolve('dist/packages/library/src/arm-runtime.js');
+  if (existsSync(canonicalSdk) || existsSync(legacySdk)) {
     const blueEnv = injector.environment('payment-service', 'payment-service-blue');
     assert.equal(blueEnv.ARM_BRIDGE_METRICS_PORT, '3501');
-    assert.equal(blueEnv.ARM_BRIDGE_MODULE_PATH, resolve('dist/packages/library/src/arm-runtime.js'));
+    assert.equal(blueEnv.ARM_BRIDGE_MODULE_PATH, existsSync(canonicalSdk) ? canonicalSdk : legacySdk);
   } else {
     assert.throws(
       () => injector.environment('payment-service', 'payment-service-blue'),
@@ -53,8 +55,8 @@ test('Phase 9 bridge configuration validates independent credentials and safe sc
 });
 
 test('Phase 9 bridges a plain Node child into real ARM Client metrics and registration', async t => {
-  const built = resolve('dist/packages/library/src/arm-runtime.js');
-  if (!existsSync(built)) {
+  const built = resolve('dist/packages/arm-client-sdk/src/arm-runtime.js');
+  if (!existsSync(built) && !existsSync(resolve('dist/packages/library/src/arm-runtime.js'))) {
     t.skip('Run npm run build first; bridge imports the compiled ARM Client SDK');
     return;
   }

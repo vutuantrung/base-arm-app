@@ -1,3 +1,17 @@
+## Phase R5 — ARM Runtime & SDK Consolidation
+
+The embedded ARM SDK is now owned by `@arm/client-sdk`, and Phase 8/9
+preloads, injector and telemetry reader live in `@arm/runtime-injection`.
+The old `packages/library` and `adapter-process` TypeScript paths
+re-export their new implementations. The build continues to copy both old
+and new preloads, and the bridge prefers the new compiled SDK with a legacy
+fallback for compatibility.
+
+See [Phase R5](docs/PHASE_R5_ARM_RUNTIME_SDK_CONSOLIDATION.md)
+and [ADR-R5-001](docs/architecture/ADR-R5-001-ARM-SDK-RUNTIME-BOUNDARIES.md).
+No business lifecycle or wire protocol change is intended. Build and tests
+must pass before production deployment.
+
 ## Phase R4 — Monitoring, Discovery & Routing Extraction
 
 The Supervisor now has `@arm/runtime-monitor`, `@arm/service-discovery`

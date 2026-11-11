@@ -7,8 +7,8 @@ import { RuntimeStateStore } from '../../../packages/runtime-monitor/src/index.j
 import { ApplicationReleaseManager } from '../../../packages/deployment-manager/src/index.js';
 import { SafeRolloutManager } from '../../../packages/deployment-manager/src/index.js';
 import { BlueGreenDeploymentManager } from '../../../packages/adapter-process/src/blue-green-deployment-manager.js';
-import { ArmRuntimeInjector } from '../../../packages/adapter-process/src/arm-runtime-injector.js';
-import { ArmTelemetryReader } from '../../../packages/adapter-process/src/arm-telemetry-reader.js';
+import { ArmRuntimeInjector } from '../../../packages/runtime-injection/src/index.js';
+import { ArmTelemetryReader } from '../../../packages/runtime-injection/src/index.js';
 import { join } from 'node:path';
 import { ApplicationRegistry } from '../../../packages/service-discovery/src/index.js';
 import { RemoteArmMetricsCollector } from '../../../packages/service-discovery/src/index.js';

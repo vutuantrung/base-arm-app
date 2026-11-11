@@ -29,3 +29,9 @@ have not all migrated to contracts yet.
 `@arm/service-discovery`; `TrafficRouter` by
 `BlueGreenTrafficRouterAdapter` in `@arm/traffic-router`. These adapters
 are opt-in and the legacy Blue/Green orchestration is not rewired yet.
+
+## Phase R5 update
+
+The `TelemetryReader` port now has `ArmTelemetryReaderAdapter` in
+`@arm/runtime-injection`. This is a read-only projection of Phase 8
+snapshot data and does not infer process liveness or application readiness.

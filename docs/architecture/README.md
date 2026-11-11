@@ -1,3 +1,8 @@
+## Phase R5 — ARM SDK and Runtime Injection
+
+- [Phase R5 — ARM Runtime & SDK Consolidation](../PHASE_R5_ARM_RUNTIME_SDK_CONSOLIDATION.md)
+- [ADR-R5-001 — SDK / Runtime Injection Boundaries](./ADR-R5-001-ARM-SDK-RUNTIME-BOUNDARIES.md)
+
 ## Phase R4 — Monitoring, Discovery & Routing
 
 - [Phase R4 — Module Extraction](../PHASE_R4_MONITORING_DISCOVERY_ROUTING_EXTRACTION.md)

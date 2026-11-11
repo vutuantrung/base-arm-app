@@ -8,7 +8,7 @@ import { Transform } from 'node:stream';
 import type { ApplicationReleaseManager } from '../../deployment-manager/src/index.js';
 import type { SafeRolloutManager } from '../../deployment-manager/src/index.js';
 import type { BlueGreenDeploymentManager } from './blue-green-deployment-manager.js';
-import type { ArmTelemetryReader } from './arm-telemetry-reader.js';
+import type { ArmTelemetryReader } from '../../runtime-injection/src/index.js';
 import type { ApplicationRegistry } from '../../service-discovery/src/index.js';
 import type { RemoteArmMetricsCollector } from '../../service-discovery/src/index.js';
 import { ApplicationRuntimeMonitor } from '../../runtime-monitor/src/index.js';
