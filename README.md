@@ -1,3 +1,16 @@
+## Phase R2 — Extracted Process Management module
+
+The durable process implementation now lives in
+[`packages/process-manager`](packages/process-manager/README.md), exporting
+`ProcessManager`, `ProcessControllerAdapter`, `DynamicPortAllocator`,
+and `ChildEnvironmentBuilder` through one public entrypoint.
+Existing imports in `adapter-process` are compatibility re-exports.
+
+The process module depends on a small launch instrumentation port instead
+of the concrete ARM injector. See [Phase R2](docs/PHASE_R2_PROCESS_MANAGEMENT_EXTRACTION.md).
+This is a structural refactor; no endpoint, persistence, or process lifecycle
+behavior change is intended. Verify `npm run build && npm test` locally.
+
 ## Phase R1 — Module Boundaries & Contracts
 
 The ARM Supervisor modular-monolith refactor starts with an **architecture-only**

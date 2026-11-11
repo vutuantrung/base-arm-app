@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { ProcessManager, type ProcessView } from './process-manager.js';
+import { ProcessManager, type ProcessView } from '../../process-manager/src/index.js';
 import { ArmRuntimeInjector } from './arm-runtime-injector.js';
 import { ApplicationStorage } from './deployment/application-storage.js';
 import { ApplicationConfigurationStore } from './application-configuration-store.js';

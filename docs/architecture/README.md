@@ -1,3 +1,8 @@
+## Phase R2 — Process Module Extraction
+
+- [Phase R2 Process Management Extraction](../PHASE_R2_PROCESS_MANAGEMENT_EXTRACTION.md)
+- [ADR-R2-001 Process Module](./ADR-R2-001-PROCESS-MODULE.md)
+
 ## Refactoring architecture baseline
 
 - [Phase R1 — Module Boundaries & Contracts](../PHASE_R1_MODULE_BOUNDARIES_AND_CONTRACTS.md)

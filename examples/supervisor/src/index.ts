@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { resolve } from 'node:path';
-import { ProcessManager } from '../../../packages/adapter-process/src/process-manager.js';
+import { ProcessManager } from '../../../packages/process-manager/src/index.js';
 import { RemoteArmMetricsCollector } from '../../../packages/adapter-process/src/remote-arm-metrics-collector.js';
 
 const stateFile = resolve('.arm-state/processes.json');
