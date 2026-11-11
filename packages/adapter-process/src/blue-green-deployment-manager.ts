@@ -5,7 +5,7 @@ import { ProcessManager, type ProcessView } from '../../process-manager/src/inde
 import { ArmRuntimeInjector } from './arm-runtime-injector.js';
 import { ApplicationStorage } from '../../package-manager/src/index.js';
 import { ApplicationConfigurationStore } from './application-configuration-store.js';
-import { BlueGreenHttpProxy, type ProxyTarget } from './blue-green-http-proxy.js';
+import { BlueGreenHttpProxy, type ProxyTarget } from '../../traffic-router/src/index.js';
 
 type Slot = 'blue' | 'green';
 interface SlotRecord { version: string; port: number }

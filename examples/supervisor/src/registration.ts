@@ -1,7 +1,7 @@
 import 'dotenv/config';
-import { RemoteArmMetricsCollector } from '../../../packages/adapter-process/src/remote-arm-metrics-collector.js';
-import { ApplicationRegistry } from '../../../packages/adapter-process/src/application-registry.js';
-import { ApplicationRegistrationServer } from '../../../packages/adapter-process/src/application-registration-server.js';
+import { RemoteArmMetricsCollector } from '../../../packages/service-discovery/src/index.js';
+import { ApplicationRegistry } from '../../../packages/service-discovery/src/index.js';
+import { ApplicationRegistrationServer } from '../../../packages/service-discovery/src/index.js';
 
 const registrationToken = process.env.SUPERVISOR_REGISTRATION_TOKEN;
 if (!registrationToken) throw new Error('Set SUPERVISOR_REGISTRATION_TOKEN');

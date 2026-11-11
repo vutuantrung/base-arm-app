@@ -1,3 +1,8 @@
+## Phase R4 — Monitoring, Discovery & Routing
+
+- [Phase R4 — Module Extraction](../PHASE_R4_MONITORING_DISCOVERY_ROUTING_EXTRACTION.md)
+- [ADR-R4-001 — Module Ownership](./ADR-R4-001-MONITORING-DISCOVERY-ROUTING.md)
+
 ## Phase R3 — Package & Deployment Extraction
 
 - [Phase R3 — Package & Deployment Extraction](../PHASE_R3_PACKAGE_AND_DEPLOYMENT_EXTRACTION.md)

@@ -1,3 +1,15 @@
+## Phase R4 — Monitoring, Discovery & Routing Extraction
+
+The Supervisor now has `@arm/runtime-monitor`, `@arm/service-discovery`
+and `@arm/traffic-router` modules with public entrypoints and compatibility
+re-exports. Monitoring and discovery rely on structural lifecycle/query ports,
+while routing owns only HTTP forwarding (Blue/Green orchestration remains at
+the host boundary). New `EndpointDirectoryAdapter` and
+`BlueGreenTrafficRouterAdapter` implement R1 interfaces.
+
+See [Phase R4](docs/PHASE_R4_MONITORING_DISCOVERY_ROUTING_EXTRACTION.md)
+and [ADR-R4-001](docs/architecture/ADR-R4-001-MONITORING-DISCOVERY-ROUTING.md).
+
 ## Phase R3 — Package & Deployment Extraction
 
 Package installation and immutable ZIP releases now live in

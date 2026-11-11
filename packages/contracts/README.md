@@ -22,3 +22,10 @@ Architecture and ownership: [Phase R1](../../../docs/PHASE_R1_MODULE_BOUNDARIES_
 `ReleaseSelectorAdapter` in `packages/deployment-manager`.
 These are explicit opt-in adapters; existing application lifecycle callers
 have not all migrated to contracts yet.
+
+## Phase R4 update
+
+`EndpointDirectory` is now implemented by `EndpointDirectoryAdapter` in
+`@arm/service-discovery`; `TrafficRouter` by
+`BlueGreenTrafficRouterAdapter` in `@arm/traffic-router`. These adapters
+are opt-in and the legacy Blue/Green orchestration is not rewired yet.

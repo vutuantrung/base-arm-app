@@ -1,19 +1,19 @@
 import 'dotenv/config';
 import { resolve } from 'node:path';
 import { ApplicationLifecycleManager } from '../../../packages/adapter-process/src/application-lifecycle-manager.js';
-import { ApplicationRuntimeMonitor } from '../../../packages/adapter-process/src/application-runtime-monitor.js';
+import { ApplicationRuntimeMonitor } from '../../../packages/runtime-monitor/src/index.js';
 import { ApplicationManagementApi } from '../../../packages/adapter-process/src/application-management-api.js';
-import { RuntimeStateStore } from '../../../packages/adapter-process/src/runtime-state-store.js';
+import { RuntimeStateStore } from '../../../packages/runtime-monitor/src/index.js';
 import { ApplicationReleaseManager } from '../../../packages/deployment-manager/src/index.js';
 import { SafeRolloutManager } from '../../../packages/deployment-manager/src/index.js';
 import { BlueGreenDeploymentManager } from '../../../packages/adapter-process/src/blue-green-deployment-manager.js';
 import { ArmRuntimeInjector } from '../../../packages/adapter-process/src/arm-runtime-injector.js';
 import { ArmTelemetryReader } from '../../../packages/adapter-process/src/arm-telemetry-reader.js';
 import { join } from 'node:path';
-import { ApplicationRegistry } from '../../../packages/adapter-process/src/application-registry.js';
-import { RemoteArmMetricsCollector } from '../../../packages/adapter-process/src/remote-arm-metrics-collector.js';
-import { ApplicationRegistrationServer } from '../../../packages/adapter-process/src/application-registration-server.js';
-import { ApplicationEndpointDiscovery } from '../../../packages/adapter-process/src/application-endpoint-discovery.js';
+import { ApplicationRegistry } from '../../../packages/service-discovery/src/index.js';
+import { RemoteArmMetricsCollector } from '../../../packages/service-discovery/src/index.js';
+import { ApplicationRegistrationServer } from '../../../packages/service-discovery/src/index.js';
+import { ApplicationEndpointDiscovery } from '../../../packages/service-discovery/src/index.js';
 
 async function main(): Promise<void> {
   const token = process.env.ARM_MANAGEMENT_TOKEN;
