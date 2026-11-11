@@ -4,6 +4,7 @@ import { readFile, rename, mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { ArmRuntimeInjector } from './arm-runtime-injector.js';
 import { ChildEnvironmentBuilder } from './child-environment-builder.js';
+import { DynamicPortAllocator } from './dynamic-port-allocator.js';
 
 export interface ProcessSpec {
   id: string;
@@ -25,6 +26,8 @@ export interface ManagedProcessState {
   /** Linux /proc start time, used to defend against PID reuse. */
   startTime?: string;
   startedAt: string;
+  /** Actual assigned HTTP port, retained for Supervisor re-adoption. */
+  port?: number;
 }
 
 export type ProcessStatus = 'RUNNING' | 'STOPPED' | 'UNKNOWN';
@@ -34,6 +37,7 @@ export interface ProcessView {
   pid?: number;
   status: ProcessStatus;
   adopted: boolean;
+  port?: number;
 }
 
 function isAlive(pid: number): boolean {
@@ -68,6 +72,7 @@ export class ProcessManager extends EventEmitter {
   private readonly states = new Map<string, ManagedProcessState>();
   private readonly children = new Map<string, ChildProcess>();
   private readonly locks = new Set<string>();
+  private readonly ports = new DynamicPortAllocator();
   private initialized = false;
   private persistQueue: Promise<void> = Promise.resolve();
 
@@ -104,6 +109,9 @@ export class ProcessManager extends EventEmitter {
     }
     this.initialized = true;
     await this.reconcile();
+    for (const record of this.states.values()) {
+      if (record.port) this.ports.claim(record.port);
+    }
   }
 
   /**
@@ -131,6 +139,7 @@ export class ProcessManager extends EventEmitter {
       throw new Error(`Unverified PID ${state.pid}; refusing spec replacement`);
     }
     this.states.delete(id);
+    if (state.port) this.ports.release(state.port);
     await this.persist();
     return false;
   }
@@ -152,7 +161,7 @@ export class ProcessManager extends EventEmitter {
     if (!state) return { id, status: 'STOPPED', adopted: false };
     const verified = await this.verify(state);
     return {
-      id, pid: state.pid,
+      id, pid: state.pid, port: state.port,
       status: verified ? 'RUNNING' : isAlive(state.pid) ? 'UNKNOWN' : 'STOPPED',
       adopted: !this.children.has(id),
     };
@@ -164,6 +173,7 @@ export class ProcessManager extends EventEmitter {
       return {
         id,
         pid: state?.pid,
+        port: state?.port,
         status: state && isAlive(state.pid) ? 'RUNNING' : state ? 'UNKNOWN' : 'STOPPED',
         adopted: !!state && !this.children.has(id),
       };
@@ -203,6 +213,7 @@ export class ProcessManager extends EventEmitter {
           continue;
         }
         this.states.delete(id);
+        if (state.port) this.ports.release(state.port);
         changed = true;
         this.emit('exited', { id, pid: state.pid });
       } else if (!this.children.has(id)) {
@@ -210,6 +221,29 @@ export class ProcessManager extends EventEmitter {
       }
     }
     if (changed) await this.persist();
+  }
+
+  /** Backfill endpoint metadata for a verified pre-allocation Blue/Green process. */
+  async restoreEndpoint(id: string, port: number): Promise<void> {
+    this.assertInitialized();
+    await this.lock(id, async () => {
+      const record = this.states.get(id);
+      if (!record || !(await this.verify(record))) {
+        throw new Error('Cannot restore endpoint for an unverified process');
+      }
+      if (record.port !== undefined) {
+        if (record.port !== port) throw new Error('Existing endpoint port mismatch');
+        return;
+      }
+      this.ports.claim(port);
+      record.port = port;
+      try { await this.persist(); }
+      catch (error) {
+        record.port = undefined;
+        this.ports.release(port);
+        throw error;
+      }
+    });
   }
 
   async start(id: string): Promise<ManagedProcessState> {
@@ -222,43 +256,60 @@ export class ProcessManager extends EventEmitter {
         if (isAlive(existing.pid)) {
           throw new Error(`Unverified PID ${existing.pid}; refusing duplicate start`);
         }
+        this.states.delete(id);
+        if (existing.port) this.ports.release(existing.port);
       }
       return this.launch(id, spec);
     });
   }
 
   private async launch(id: string, spec: ProcessSpec): Promise<ManagedProcessState> {
-      const applicationId = spec.env?.ARM_APPLICATION_ID ?? spec.id;
-      const instanceId = spec.env?.ARM_INSTANCE_ID ?? spec.id;
+    const applicationId = spec.env?.ARM_APPLICATION_ID ?? spec.id;
+    const instanceId = spec.env?.ARM_INSTANCE_ID ?? spec.id;
+    // An operator-specified app PORT takes precedence; trusted Blue/Green ports
+    // are used only when no application port was configured.
+    const declared = spec.applicationEnv?.PORT ?? spec.env?.PORT;
+    let port: number;
+    if (declared !== undefined) {
+      if (!/^[1-9][0-9]{0,4}$/.test(declared) || Number(declared) > 65535) {
+        throw new Error('Invalid child HTTP PORT');
+      }
+      port = Number(declared);
+      this.ports.claim(port);
+    } else {
+      port = await this.ports.allocate();
+    }
+    let child: ChildProcess | undefined;
+    try {
       const childEnvironment = this.environmentBuilder.build({
         applicationEnv: spec.applicationEnv,
-        runtimeEnv: spec.env,
+        runtimeEnv: { ...spec.env, PORT: String(port), HOST: spec.env?.HOST ?? '127.0.0.1' },
         injectionEnv: this.injector?.environment(applicationId, instanceId),
       });
-      const child = spawn(process.execPath, this.injector?.nodeArguments(spec.entry, spec.args, applicationId) ??
-        [spec.entry, ...(spec.args ?? [])], {
-        cwd: spec.cwd,
-        env: childEnvironment,
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: true,
-      });
+      // The OS selects an available port during the allocator probe. This
+      // allocation is advisory until the child actually binds and confirms readiness.
+      child = spawn(process.execPath,
+        this.injector?.nodeArguments(spec.entry, spec.args, applicationId) ??
+          [spec.entry, ...(spec.args ?? [])], {
+          cwd: spec.cwd,
+          env: childEnvironment,
+          detached: true,
+          stdio: 'ignore',
+          windowsHide: true,
+        });
       await new Promise<void>((resolve, reject) => {
-        child.once('spawn', resolve);
-        child.once('error', reject);
+        child!.once('spawn', resolve);
+        child!.once('error', reject);
       });
       if (!child.pid) throw new Error('Spawn did not return a PID');
       child.unref();
-
       const state: ManagedProcessState = {
-        id, pid: child.pid, startedAt: new Date().toISOString(),
+        id, pid: child.pid, port, startedAt: new Date().toISOString(),
         startTime: await linuxStartTime(child.pid),
       };
-      // Persist before considering the process managed.
-      try {
-        this.states.set(id, state);
-        await this.persist();
-      } catch (error) {
+      this.states.set(id, state);
+      try { await this.persist(); }
+      catch (error) {
         this.states.delete(id);
         child.kill();
         throw error;
@@ -266,12 +317,14 @@ export class ProcessManager extends EventEmitter {
       this.children.set(id, child);
       child.once('exit', (code, signal) => {
         if (this.children.get(id) === child) this.children.delete(id);
-        // Do not auto-delete persistent state here: reconciling and
-        // recording exit are asynchronous and could race with a new spawn.
         this.emit('exit', { id, pid: state.pid, code, signal });
       });
       this.emit('started', { ...state });
       return state;
+    } catch (error) {
+      this.ports.release(port);
+      throw error;
+    }
   }
 
   async stop(id: string, timeoutMs = 5000): Promise<void> {
@@ -294,6 +347,7 @@ export class ProcessManager extends EventEmitter {
     if (!(await this.verify(state))) {
       if (isAlive(state.pid)) throw new Error(`Unsafe to signal unverified PID ${state.pid}`);
       this.states.delete(id);
+      if (state.port) this.ports.release(state.port);
       await this.persist();
       return;
     }
@@ -306,12 +360,14 @@ export class ProcessManager extends EventEmitter {
       throw new Error(`Process ${id} did not stop within ${timeoutMs}ms`);
     }
     this.states.delete(id);
+    if (state.port) this.ports.release(state.port);
     await this.persist();
     this.emit('stopped', { id, pid: state.pid });
   }
 
   /** Deliberately leaves detached apps running when supervisor exits. */
   close(): void {
+    for (const state of this.states.values()) if (state.port) this.ports.release(state.port);
     this.removeAllListeners();
   }
 

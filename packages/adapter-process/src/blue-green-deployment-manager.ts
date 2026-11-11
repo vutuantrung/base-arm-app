@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { ProcessManager, type ProcessView } from './process-manager.js';
 import { ArmRuntimeInjector } from './arm-runtime-injector.js';
 import { ApplicationStorage } from './deployment/application-storage.js';
+import { ApplicationConfigurationStore } from './application-configuration-store.js';
 import { BlueGreenHttpProxy, type ProxyTarget } from './blue-green-http-proxy.js';
 
 type Slot = 'blue' | 'green';
@@ -21,14 +22,15 @@ export interface BlueGreenOptions {
   storageRoot: string;
   applicationId: string;
   proxyPort: number;
-  bluePort: number;
-  greenPort: number;
+  bluePort?: number;
+  greenPort?: number;
   healthPath?: string;
   healthTimeoutMs?: number;
   drainTimeoutMs?: number;
   injector?: ArmRuntimeInjector;
   /** Per-application business settings, applied to each slot. */
   applicationEnv?: Record<string, string>;
+  runtimeEnv?: Record<string, string>;
 }
 
 const APP_ID = /^[A-Za-z][A-Za-z0-9_.-]{0,55}$/;
@@ -42,9 +44,10 @@ const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, m
 export class BlueGreenDeploymentManager {
   readonly processes: ProcessManager;
   readonly storage: ApplicationStorage;
+  readonly configurations: ApplicationConfigurationStore;
   readonly proxy: BlueGreenHttpProxy;
   private state: BlueGreenState;
-  private readonly ports: Record<Slot, number>;
+  private readonly requestedPorts: Partial<Record<Slot, number>>;
   private deploying = false;
   private initialized = false;
   private readonly healthPath: string;
@@ -54,14 +57,17 @@ export class BlueGreenDeploymentManager {
 
   constructor(private readonly options: BlueGreenOptions) {
     if (!APP_ID.test(options.applicationId)) throw new Error('Invalid application ID');
-    if (new Set([options.proxyPort, options.bluePort, options.greenPort]).size !== 3) {
+    const configuredPorts = [options.proxyPort, options.bluePort, options.greenPort]
+      .filter((port): port is number => port !== undefined);
+    if (new Set(configuredPorts).size !== configuredPorts.length) {
       throw new Error('Proxy and slot ports must be different');
     }
-    for (const port of [options.proxyPort, options.bluePort, options.greenPort]) {
+    for (const port of configuredPorts) {
       if (!Number.isSafeInteger(port) || port < 1 || port > 65535) throw new Error('Invalid deployment port');
     }
-    this.ports = { blue: options.bluePort, green: options.greenPort };
+    this.requestedPorts = { blue: options.bluePort, green: options.greenPort };
     this.storage = new ApplicationStorage(options.storageRoot);
+    this.configurations = new ApplicationConfigurationStore(this.storage.root);
     this.processes = new ProcessManager(join(this.storage.root, 'state', 'blue-green-processes.json'), options.injector);
     this.proxy = new BlueGreenHttpProxy(options.proxyPort);
     this.filename = join(this.storage.root, 'applications', options.applicationId, 'blue-green.json');
@@ -86,12 +92,22 @@ export class BlueGreenDeploymentManager {
         .map(async slot => this.buildSpec(slot, this.state[slot]!.version)),
     );
     await this.processes.initialize(specs);
+    // Restore the port from the Phase 7 Blue/Green journal for processes
+    // adopted from a pre-dynamic-port process registry.
+    for (const slot of ['blue', 'green'] as Slot[]) {
+      const previous = this.state[slot];
+      if (!previous) continue;
+      const view = await this.processes.inspect(this.processId(slot));
+      if (view.status === 'RUNNING' && !view.port) {
+        await this.processes.restoreEndpoint(this.processId(slot), previous.port);
+      }
+    }
     // Never route traffic to an unavailable / unverified target after restart.
     if (this.state.active) {
       const current = await this.processes.inspect(this.processId(this.state.active));
       if (current.status === 'RUNNING' &&
-          await this.isHealthy(this.ports[this.state.active])) {
-        this.proxy.switchTo({ slot: this.state.active, port: this.ports[this.state.active] });
+          await this.isHealthy(this.portFor(this.state.active))) {
+        this.proxy.switchTo({ slot: this.state.active, port: this.portFor(this.state.active) });
       }
     }
     await this.proxy.listen();
@@ -117,7 +133,7 @@ export class BlueGreenDeploymentManager {
       const previous = this.state.active;
       // The proxy switch is immediate for NEW requests. Existing requests
       // retain the backend they selected when they entered the proxy.
-      this.proxy.switchTo({ slot: target, port: this.ports[target] });
+      this.proxy.switchTo({ slot: target, port: this.portFor(target) });
       switched = true;
       this.state.active = target;
       await this.persist();
@@ -136,8 +152,8 @@ export class BlueGreenDeploymentManager {
         if (!existing) throw error;
         const oldSlot = existing.slot;
         const verified = await this.processes.inspect(this.processId(oldSlot));
-        if (verified.status === 'RUNNING' && await this.isHealthy(this.ports[oldSlot])) {
-          this.proxy.switchTo({ slot: oldSlot, port: this.ports[oldSlot] });
+        if (verified.status === 'RUNNING' && await this.isHealthy(this.portFor(oldSlot))) {
+          this.proxy.switchTo({ slot: oldSlot, port: this.portFor(oldSlot) });
           this.state.active = oldSlot;
           await this.persist();
         } else {
@@ -165,6 +181,8 @@ export class BlueGreenDeploymentManager {
     };
   }
 
+  publicPort(): number { return this.options.proxyPort; }
+
   async close(): Promise<void> {
     await this.proxy.close();
     this.processes.close(); // Detached child processes deliberately survive.
@@ -183,9 +201,10 @@ export class BlueGreenDeploymentManager {
       }
     }
     await this.processes.registerSpec(await this.buildSpec(slot, version));
-    this.state[slot] = { version, port: this.ports[slot] };
+    const started = await this.processes.start(id);
+    if (!started.port) throw new Error('Candidate process did not receive an HTTP port');
+    this.state[slot] = { version, port: started.port };
     await this.persist();
-    await this.processes.start(id);
   }
 
   private async buildSpec(slot: Slot, version: string) {
@@ -195,15 +214,22 @@ export class BlueGreenDeploymentManager {
       this.options.injector?.bridgeEnabledFor(this.options.applicationId)) {
       throw new Error('ARM Client Bridge cannot replace an app with embedded ARM SDK');
     }
+    const config = await this.configurations.read(this.options.applicationId);
+    const configuredPort = config.environment.PORT ?? this.options.applicationEnv?.PORT;
+    if (configuredPort !== undefined) {
+      // Two concurrent slots cannot listen on the same application-defined port.
+      throw new Error('Blue/Green requires dynamic ports; remove application PORT from config');
+    }
     return {
       id: this.processId(slot),
       entry: release.entry,
       cwd: release.directory,
-      applicationEnv: this.options.applicationEnv,
+      applicationEnv: { ...config.environment, ...this.options.applicationEnv },
       env: {
+        ...this.options.runtimeEnv,
         NODE_ENV: 'production',
         HOST: '127.0.0.1',
-        PORT: String(this.ports[slot]),
+        ...(this.requestedPorts[slot] ? { PORT: String(this.requestedPorts[slot]) } : {}),
         ARM_APPLICATION_ID: this.options.applicationId,
         ARM_INSTANCE_ID: `${this.options.applicationId}-${slot}`,
       },
@@ -215,7 +241,7 @@ export class BlueGreenDeploymentManager {
     while (Date.now() < deadline) {
       const process = await this.processes.inspect(this.processId(slot));
       if (process.status !== 'RUNNING') throw new Error('Candidate exited before readiness');
-      if (await this.isHealthy(this.ports[slot])) return;
+      if (await this.isHealthy(this.portFor(slot))) return;
       await delay(100);
     }
     throw new Error('Candidate health probe timed out');
@@ -235,6 +261,12 @@ export class BlueGreenDeploymentManager {
     if (!slot) return undefined;
     const record = this.state[slot];
     return record ? { slot, version: record.version } : undefined;
+  }
+
+  private portFor(slot: Slot): number {
+    const port = this.state[slot]?.port;
+    if (!port) throw new Error('No HTTP port recorded for ' + slot);
+    return port;
   }
 
   private processId(slot: Slot): string { return `${this.options.applicationId}-${slot}`; }
@@ -274,7 +306,8 @@ export class BlueGreenDeploymentManager {
       if (data[slot] === undefined) continue;
       const item = data[slot] as Record<string, unknown>;
       if (!item || typeof item.version !== 'string' || !VERSION.test(item.version) ||
-          item.port !== this.ports[slot]) throw new Error('Invalid blue/green slot');
+          !Number.isSafeInteger(item.port) || (item.port as number) < 1 ||
+          (item.port as number) > 65535) throw new Error('Invalid blue/green slot');
     }
     return candidate as BlueGreenState;
   }

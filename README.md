@@ -1,3 +1,18 @@
+## Dynamic application HTTP ports and service discovery
+
+When an application's optional operator-managed
+`supervisor-data/applications/<id>/application-config.json` has no
+`environment.PORT`, the Supervisor allocates an available ephemeral port
+and passes it as `PORT` to the child. The per-process port is persisted
+alongside the PID. An explicit singleton application `PORT` wins.
+
+Blue/Green slots are dynamic by default. Set
+`ARM_DISCOVERY_TOKEN` (16+ characters) in the Supervisor `.env` to allow
+children to query the restricted authenticated
+`GET /runtime/endpoints/:applicationId` endpoint with
+`ARM_DISCOVERY_URL` and `ARM_DISCOVERY_TOKEN`.
+See [dynamic endpoints](docs/DYNAMIC_ENDPOINTS.md).
+
 ## Child process environment isolation
 
 The Supervisor now creates each managed process environment through

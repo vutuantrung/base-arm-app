@@ -12,6 +12,7 @@ import type { ArmTelemetryReader } from './arm-telemetry-reader.js';
 import type { ApplicationRegistry } from './application-registry.js';
 import type { RemoteArmMetricsCollector } from './remote-arm-metrics-collector.js';
 import { ApplicationRuntimeMonitor } from './application-runtime-monitor.js';
+import type { ApplicationEndpointDiscovery } from './application-endpoint-discovery.js';
 
 export interface ApplicationManagementApiOptions {
   host?: string;
@@ -25,6 +26,8 @@ export interface ApplicationManagementApiOptions {
   telemetryReader?: ArmTelemetryReader;
   registrationRegistry?: ApplicationRegistry;
   registrationCollector?: RemoteArmMetricsCollector;
+  endpointDiscovery?: ApplicationEndpointDiscovery;
+  discoveryToken?: string;
 }
 
 /** Loopback-only administrative API with explicit bearer authentication. */
@@ -41,6 +44,9 @@ export class ApplicationManagementApi {
   ) {
     if (!options.bearerToken || options.bearerToken.length < 16) {
       throw new Error('Management API requires a bearer token of at least 16 characters');
+    }
+    if (options.discoveryToken && options.discoveryToken.length < 16) {
+      throw new Error('Discovery API requires a token of at least 16 characters');
     }
     this.host = options.host ?? '127.0.0.1';
     this.port = options.port ?? 3300;
@@ -68,9 +74,9 @@ export class ApplicationManagementApi {
     });
   }
 
-  private isAuthorized(req: IncomingMessage): boolean {
+  private isAuthorized(req: IncomingMessage, token = this.options.bearerToken): boolean {
     const candidate = req.headers.authorization ?? '';
-    const expected = `Bearer ${this.options.bearerToken}`;
+    const expected = `Bearer ${token}`;
     const actualBuffer = Buffer.from(candidate);
     const expectedBuffer = Buffer.from(expected);
     return actualBuffer.length === expectedBuffer.length &&
@@ -78,12 +84,34 @@ export class ApplicationManagementApi {
   }
 
   private async handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const pathname = new URL(req.url ?? '/', 'http://localhost').pathname;
+    const discovery = /^\/runtime\/endpoints(?:\/([A-Za-z][A-Za-z0-9_.-]{0,63}))?$/.exec(pathname);
+    if (discovery && req.method === 'GET') {
+      if (!this.isAuthorized(req) &&
+        (!this.options.discoveryToken ||
+          !this.isAuthorized(req, this.options.discoveryToken))) {
+        this.respond(res, 401, { error: 'unauthorized' });
+        return;
+      }
+      if (!this.options.endpointDiscovery) {
+        this.respond(res, 404, { error: 'discovery_disabled' });
+        return;
+      }
+      try {
+        const item = discovery[1]
+          ? await this.options.endpointDiscovery.find(discovery[1])
+          : await this.options.endpointDiscovery.list();
+        this.respond(res, item === undefined ? 404 : 200, item ?? { error: 'not_found' });
+      } catch {
+        this.respond(res, 500, { error: 'internal_error' });
+      }
+      return;
+    }
     if (!this.isAuthorized(req)) {
       this.respond(res, 401, { error: 'unauthorized' });
       return;
     }
     try {
-      const pathname = new URL(req.url ?? '/', 'http://localhost').pathname;
       if (pathname === '/deployments/upload' && req.method === 'POST') {
         if (!this.options.releaseManager) throw new Error('Deployment API unavailable');
         this.respond(res, 201, await this.handleZipUpload(req));

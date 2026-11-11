@@ -26,7 +26,7 @@ is committed. Do not commit real credentials.
 | Management API | `ARM_MANAGEMENT_TOKEN`, `ARM_MANAGEMENT_PORT`, `ARM_DEPLOYMENT_ROOT` | Required token, 3300, ./supervisor-data |
 | Monitoring | `ARM_MONITOR_INTERVAL_MS`, `ARM_STABLE_RESET_MS` | 1000, 60000 ms |
 | Safe rollout | `ARM_ROLLOUT_STABILITY_MS` | 1500 ms |
-| Blue/Green | `ARM_BLUE_GREEN_APP_ID`, `ARM_PROXY_PORT`, `ARM_BLUE_PORT`, `ARM_GREEN_PORT` | Disabled, 3400, 3401, 3402 |
+| Blue/Green | `ARM_BLUE_GREEN_APP_ID`, `ARM_PROXY_PORT`, `ARM_BLUE_PORT`, `ARM_GREEN_PORT` | Disabled, 3400, dynamic Blue/Green ports unless explicitly set |
 | Runtime injection | `ARM_AUTO_INJECT`, `ARM_TELEMETRY_INTERVAL_MS` | 0 (off), 1000 ms |
 | Client SDK bridge | `ARM_CLIENT_BRIDGE_APP_ID`, `ARM_BRIDGE_REGISTRATION_PORT`, `ARM_BRIDGE_METRICS_BASE_PORT`, `ARM_BRIDGE_REGISTRATION_TOKEN`, `ARM_BRIDGE_METRICS_TOKEN` | Disabled, 3200, 3500, two required distinct secrets |
 | Embedded SDK metrics | `ARM_METRICS_TOKEN` | Optional |
@@ -70,3 +70,63 @@ credentials.
 Changing `.env` requires restarting the Supervisor to change daemon settings;
 already-running child applications retain their original environment. Use a
 controlled restart/rollout to update injection-related settings for those apps.
+
+## Dynamic child HTTP ports and peer discovery
+
+The Supervisor now assigns an ephemeral HTTP port whenever a child application's
+`application-config.json` does not specify `environment.PORT`. The root
+Supervisor `.env` `PORT` is **not** inherited by managed child processes.
+
+Create the optional operator-owned file (outside the immutable release ZIP):
+
+```text
+supervisor-data/applications/payment-service/application-config.json
+```
+
+```json
+{
+  "schemaVersion": 1,
+  "environment": {
+    "LOG_LEVEL": "info"
+  }
+}
+```
+
+If you need to pin the singleton app to a port, add `"PORT": "3201"`.
+For Blue/Green, do not set application `PORT`; two slots must bind separate
+endpoints. The optional Supervisor `ARM_BLUE_PORT` and `ARM_GREEN_PORT` may
+still pin slot ports for compatibility, but should normally be left blank.
+
+A newly spawned child receives `PORT`, `HOST=127.0.0.1`,
+`ARM_DISCOVERY_URL` and `ARM_DISCOVERY_TOKEN` (the latter two only if the
+root Supervisor has `ARM_DISCOVERY_TOKEN` configured). A child can discover
+another managed HTTP app:
+
+```js
+const response = await fetch(
+  process.env.ARM_DISCOVERY_URL + '/runtime/endpoints/user-service',
+  { headers: { authorization: `Bearer ${process.env.ARM_DISCOVERY_TOKEN}` } },
+);
+if (!response.ok) throw new Error('Peer not available');
+const { url } = await response.json();
+const peer = await fetch(url + '/health');
+```
+
+The discovery endpoint is loopback-only and only lists managed processes with
+verified RUNNING state and a responding local HTTP endpoint.
+An HTTP response (even 404) proves connectivity, **not business readiness**.
+For a Blue/Green app the published service URL points at the stable proxy,
+not the active child slot. Use `GET /runtime/endpoints` to list all candidates.
+The restricted discovery bearer token cannot access other Management API
+routes; do not distribute the management token to children.
+
+**Limitations:** Child apps must honor `process.env.PORT` and `HOST`; an
+application that hardcodes a port cannot be controlled by allocation alone.
+The ephemeral-port probe closes before the child binds, so another process can
+take that port (TOCTOU race). Production hardening needs socket handoff or
+bind/retry confirmation. This discovery implementation covers only HTTP apps
+on the same network namespace and is not a Kubernetes service registry.
+Existing running children preserve old port/environment settings until a
+controlled restart. Configuration changes are loaded when Supervisor builds
+new process specifications (usually after Supervisor restart or release
+activation), then applied when the child starts again.

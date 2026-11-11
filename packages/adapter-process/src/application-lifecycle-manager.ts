@@ -6,6 +6,7 @@ import { validateApplicationManifest } from './deployment/application-package-va
 import type { InstalledRelease } from './deployment/deployment-types.js';
 import { ProcessManager, type ProcessSpec, type ProcessView } from './process-manager.js';
 import { ArmRuntimeInjector } from './arm-runtime-injector.js';
+import { ApplicationConfigurationStore } from './application-configuration-store.js';
 
 export interface ActiveRelease {
   applicationId: string;
@@ -31,6 +32,8 @@ export interface ApplicationLifecycleOptions {
   metricsToken?: string;
   /** Per-application business configuration; reserved Supervisor keys are rejected. */
   env?: Record<string, string>;
+  /** Supervisor-owned values, including restricted discovery credentials. */
+  runtimeEnv?: Record<string, string>;
   injector?: ArmRuntimeInjector;
 }
 
@@ -46,12 +49,14 @@ const RELEASE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z
 export class ApplicationLifecycleManager {
   readonly storage: ApplicationStorage;
   readonly processes: ProcessManager;
+  readonly configurations: ApplicationConfigurationStore;
   private readonly active = new Map<string, ActiveRelease>();
   private initialized = false;
   private readonly operations = new Set<string>();
 
   constructor(private readonly options: ApplicationLifecycleOptions) {
     this.storage = new ApplicationStorage(options.storageRoot);
+    this.configurations = new ApplicationConfigurationStore(this.storage.root);
     this.processes = new ProcessManager(
       options.processStateFile ?? join(this.storage.root, 'state', 'processes.json'),
       options.injector,
@@ -65,7 +70,7 @@ export class ApplicationLifecycleManager {
     const specs: ProcessSpec[] = [];
     for (const selection of selections) {
       const release = await this.requireRelease(selection.applicationId, selection.version);
-      specs.push(this.createProcessSpec(release));
+      specs.push(await this.createProcessSpec(release));
       this.active.set(selection.applicationId, selection);
     }
     await this.processes.initialize(specs);
@@ -77,7 +82,7 @@ export class ApplicationLifecycleManager {
     return this.lock(applicationId, async () => {
       const release = await this.requireRelease(applicationId, version);
       this.assertNotRunning(applicationId, await this.currentProcess(applicationId));
-      const spec = this.createProcessSpec(release);
+      const spec = await this.createProcessSpec(release);
       await this.processes.registerSpec(spec);
       const selection = { applicationId, version, activatedAt: new Date().toISOString() };
       await this.persistSelection(selection);
@@ -173,18 +178,20 @@ export class ApplicationLifecycleManager {
     }
   }
 
-  private createProcessSpec(release: InstalledRelease): ProcessSpec {
+  private async createProcessSpec(release: InstalledRelease): Promise<ProcessSpec> {
     if (release.manifest.arm.enabled &&
       this.options.injector?.bridgeEnabledFor(release.applicationId)) {
       throw new Error('ARM Client Bridge cannot replace an app with embedded ARM SDK');
     }
     const port = release.manifest.arm.metricsPort;
+    const config = await this.configurations.read(release.applicationId);
     return {
       id: release.applicationId,
       entry: release.entry,
       cwd: release.directory,
-      applicationEnv: this.options.env,
+      applicationEnv: { ...config.environment, ...this.options.env },
       env: {
+        ...this.options.runtimeEnv,
         NODE_ENV: 'production',
         ARM_APPLICATION_ID: release.applicationId,
         ARM_INSTANCE_ID: `${release.applicationId}-managed`,

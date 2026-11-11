@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import { ApplicationRegistry } from '../../../packages/adapter-process/src/application-registry.js';
 import { RemoteArmMetricsCollector } from '../../../packages/adapter-process/src/remote-arm-metrics-collector.js';
 import { ApplicationRegistrationServer } from '../../../packages/adapter-process/src/application-registration-server.js';
+import { ApplicationEndpointDiscovery } from '../../../packages/adapter-process/src/application-endpoint-discovery.js';
 
 async function main(): Promise<void> {
   const token = process.env.ARM_MANAGEMENT_TOKEN;
@@ -57,6 +58,14 @@ async function main(): Promise<void> {
     storageRoot,
     injector,
     metricsToken: process.env.ARM_METRICS_TOKEN,
+    ...(process.env.ARM_DISCOVERY_TOKEN ? {
+      runtimeEnv: {
+        // Application service discovery uses a restricted bearer, never the
+        // management API token.
+        ARM_DISCOVERY_URL: `http://127.0.0.1:${process.env.ARM_MANAGEMENT_PORT ?? 3300}`,
+        ARM_DISCOVERY_TOKEN: process.env.ARM_DISCOVERY_TOKEN,
+      },
+    } : {}),
   });
   await lifecycle.initialize();
 
@@ -81,14 +90,21 @@ async function main(): Promise<void> {
     ? new BlueGreenDeploymentManager({
         storageRoot,
         injector,
+        ...(process.env.ARM_DISCOVERY_TOKEN ? {
+          runtimeEnv: {
+            ARM_DISCOVERY_URL: `http://127.0.0.1:${process.env.ARM_MANAGEMENT_PORT ?? 3300}`,
+            ARM_DISCOVERY_TOKEN: process.env.ARM_DISCOVERY_TOKEN,
+          },
+        } : {}),
         applicationId: process.env.ARM_BLUE_GREEN_APP_ID,
         proxyPort: Number(process.env.ARM_PROXY_PORT ?? 3400),
-        bluePort: Number(process.env.ARM_BLUE_PORT ?? 3401),
-        greenPort: Number(process.env.ARM_GREEN_PORT ?? 3402),
+        ...(process.env.ARM_BLUE_PORT ? { bluePort: Number(process.env.ARM_BLUE_PORT) } : {}),
+        ...(process.env.ARM_GREEN_PORT ? { greenPort: Number(process.env.ARM_GREEN_PORT) } : {}),
       })
     : undefined;
   if (blueGreen) await blueGreen.initialize();
 
+  const endpoints = new ApplicationEndpointDiscovery(monitor, blueGreen);
   const api = new ApplicationManagementApi(monitor, {
     releaseManager: releases,
     rolloutManager: rollout,
@@ -96,6 +112,8 @@ async function main(): Promise<void> {
     telemetryReader: telemetry,
     registrationRegistry: registry,
     registrationCollector: collector,
+    endpointDiscovery: endpoints,
+    discoveryToken: process.env.ARM_DISCOVERY_TOKEN,
     bearerToken: token,
     port: Number(process.env.ARM_MANAGEMENT_PORT ?? 3300),
   });

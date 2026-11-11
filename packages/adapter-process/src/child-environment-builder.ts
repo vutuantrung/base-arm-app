@@ -24,7 +24,7 @@ const SYSTEM_KEYS = [
 const FORBIDDEN_APP_KEYS = new Set([
   'NODE_OPTIONS', 'NODE_PATH', 'NODE_EXTRA_CA_CERTS', 'NODE_REPL_HISTORY',
   'NODE_REDIRECT_WARNINGS', 'NODE_V8_COVERAGE', 'NODE_ICU_DATA',
-  'NODE_ENV', 'HOST', 'PORT',
+  'NODE_ENV', 'HOST',
 ]);
 
 const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -72,6 +72,11 @@ export class ChildEnvironmentBuilder {
     for (const [key, value] of Object.entries(source ?? {})) {
       validateEntry(key, value, 'application');
       assertAllowedApplicationKey(key);
+      if (key.toUpperCase() === 'PORT' &&
+        (!/^[1-9][0-9]{0,4}$/.test(value) ||
+          Number(value) > 65535)) {
+        throw new Error('Invalid application PORT');
+      }
       target[key] = value;
     }
   }

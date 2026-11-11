@@ -42,7 +42,7 @@ test('ChildEnvironmentBuilder does not inherit Supervisor PORT for a singleton p
 test('ChildEnvironmentBuilder rejects reserved application names regardless of case', () => {
   const builder = new ChildEnvironmentBuilder({});
   for (const key of [
-    'PORT', 'HOST', 'NODE_ENV', 'NODE_OPTIONS', 'node_path',
+    'HOST', 'NODE_ENV', 'NODE_OPTIONS', 'node_path',
     'ARM_BRIDGE_MODULE_PATH', 'arm_management_token',
     'SUPERVISOR_REGISTRATION_TOKEN',
   ]) {
@@ -55,6 +55,13 @@ test('ChildEnvironmentBuilder rejects reserved application names regardless of c
   assert.throws(() => builder.build({
     applicationEnv: { DATABASE_URL: 'value\0other' },
   }), /Invalid application environment entry/);
+});
+
+test('ChildEnvironmentBuilder permits explicit per-application PORT', () => {
+  const builder = new ChildEnvironmentBuilder({ PORT: '3100' });
+  assert.equal(builder.build({ applicationEnv: { PORT: '3201' } }).PORT, '3201');
+  assert.throws(() => builder.build({ applicationEnv: { PORT: '70000' } }),
+    /Invalid application PORT/);
 });
 
 test('ChildEnvironmentBuilder refuses Node preload options in process specs', () => {
