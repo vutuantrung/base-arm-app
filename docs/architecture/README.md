@@ -1,3 +1,9 @@
+## Refactoring architecture baseline
+
+- [Phase R1 — Module Boundaries & Contracts](../PHASE_R1_MODULE_BOUNDARIES_AND_CONTRACTS.md)
+- [ARM Supervisor Architecture & Lifecycle Checkpoint](../ARM_SUPERVISOR_ARCHITECTURE_CHECKPOINT.md)
+- [Coding Standards](../CODING_STANDARDS.md)
+
 # ARM Architecture Diagrams
 
 Các sơ đồ Mermaid thể hiện cấu trúc và luồng hoạt động của Application Reliability Manager.

@@ -1,3 +1,13 @@
+## Phase R1 — Module Boundaries & Contracts
+
+The ARM Supervisor modular-monolith refactor starts with an **architecture-only**
+checkpoint: module/data ownership, concrete dependency map, proposed TypeScript
+ports in `packages/contracts/src/index.ts`, explicit ADRs and a migration
+plan. Phase R1 **does not move implementation files or change runtime behavior**.
+
+See [Phase R1 Module Boundaries & Contracts](docs/PHASE_R1_MODULE_BOUNDARIES_AND_CONTRACTS.md)
+and [Architecture Checkpoint](docs/ARM_SUPERVISOR_ARCHITECTURE_CHECKPOINT.md).
+
 ## Dynamic application HTTP ports and service discovery
 
 When an application's optional operator-managed
