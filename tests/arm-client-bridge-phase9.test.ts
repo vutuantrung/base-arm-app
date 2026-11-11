@@ -38,7 +38,16 @@ test('Phase 9 bridge configuration validates independent credentials and safe sc
   assert.equal(injector.nodeArguments('/tmp/service.js', [], 'payment-service')[0], '--import');
   assert.match(injector.nodeArguments('/tmp/service.js', [], 'payment-service')[1], /bridge-bootstrap\.mjs$/);
   assert.match(injector.nodeArguments('/tmp/other.js', [], 'another-service')[1], /bootstrap\.mjs$/);
-  assert.equal(injector.environment('payment-service', 'payment-service-blue').ARM_BRIDGE_METRICS_PORT, '3501');
+  if (existsSync(resolve('dist/packages/library/src/arm-runtime.js'))) {
+    const blueEnv = injector.environment('payment-service', 'payment-service-blue');
+    assert.equal(blueEnv.ARM_BRIDGE_METRICS_PORT, '3501');
+    assert.equal(blueEnv.ARM_BRIDGE_MODULE_PATH, resolve('dist/packages/library/src/arm-runtime.js'));
+  } else {
+    assert.throws(
+      () => injector.environment('payment-service', 'payment-service-blue'),
+      /Run npm run build first/,
+    );
+  }
   assert.equal(injector.environment('payment-service', 'payment-service-green').ARM_BRIDGE_METRICS_PORT, '3502');
   assert.equal(injector.environment('another-service', 'other-managed').ARM_BRIDGE_ENABLED, undefined);
 });

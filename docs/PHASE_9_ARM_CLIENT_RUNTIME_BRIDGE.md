@@ -51,7 +51,7 @@ npm run dev:management
 
 Setting `ARM_CLIENT_BRIDGE_APP_ID` enables bridge mode, which implicitly enables Phase 8 baseline telemetry. Without it, existing `ARM_AUTO_INJECT=1` continues to select Phase 8 only.
 
-**Important:** `npm run build` is mandatory before first bridge launch and after changing the ARM Client implementation. A missing compiled SDK module stops the child preload; it is not silently replaced by a fake implementation.
+**Important:** `npm run build` is mandatory before first bridge launch and after changing the ARM Client implementation. The injector now resolves the SDK from `dist/packages/library/src/arm-runtime.js` when the Supervisor is launched via `tsx` or from compiled `dist` code; the former incorrect source lookup (`packages/library/src/arm-runtime.js`) is no longer used. A missing compiled SDK module stops the child preload; it is not silently replaced by a fake implementation.
 
 Do not simultaneously launch `npm run dev:registration` on the same port: the management daemon now hosts its own registration server in bridge mode.
 

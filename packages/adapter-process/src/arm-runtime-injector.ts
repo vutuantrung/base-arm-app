@@ -1,4 +1,4 @@
-import { accessSync, constants } from 'node:fs';
+import { accessSync, constants, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 export type ArmInjectionMode = 'disabled' | 'automatic' | 'bridge';
@@ -56,12 +56,27 @@ export class ArmRuntimeInjector {
       ...basic,
       ARM_BRIDGE_ENABLED: '1',
       ARM_BRIDGE_METRICS_PORT: String(this.portFor(instanceId)),
-      ARM_BRIDGE_MODULE_PATH: fileURLToPath(
-        new URL('../../library/src/arm-runtime.js', import.meta.url)),
+      ARM_BRIDGE_MODULE_PATH: this.resolveArmClientModule(),
       ARM_BRIDGE_REGISTRATION_URL: this.config.bridgeRegistrationUrl!,
       ARM_BRIDGE_REGISTRATION_TOKEN: this.config.bridgeRegistrationToken!,
       ARM_BRIDGE_METRICS_TOKEN: this.config.bridgeMetricsToken!,
     };
+  }
+
+  /**
+   * Resolve the compiled SDK from either source/tsx or dist/compiled execution.
+   * The Supervisor owns this module, never an uploaded application ZIP.
+   */
+  private resolveArmClientModule(): string {
+    const candidates = [
+      new URL('../../../dist/packages/library/src/arm-runtime.js', import.meta.url),
+      new URL('../../library/src/arm-runtime.js', import.meta.url),
+    ];
+    const compiled = candidates.map(url => fileURLToPath(url)).find(path => existsSync(path));
+    if (!compiled) {
+      throw new Error('ARM Client Runtime Bridge requires compiled SDK. Run npm run build first.');
+    }
+    return compiled;
   }
 
   bridgeEnabledFor(applicationId: string): boolean {
