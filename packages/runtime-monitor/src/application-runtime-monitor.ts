@@ -13,7 +13,7 @@ export interface RuntimeMonitoringOptions {
 
 export type RecoveryState = 'IDLE' | 'SCHEDULED' | 'RECOVERING' | 'EXHAUSTED' | 'MANUALLY_STOPPED';
 export interface RuntimeMonitorStatus {
-  application: ApplicationRuntimeView;
+  application: RuntimeApplicationView;
   recovery: {
     state: RecoveryState;
     attempts: number;
