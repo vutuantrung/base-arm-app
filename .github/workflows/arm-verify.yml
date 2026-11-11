@@ -1,0 +1,28 @@
+name: ARM Architecture & Regression
+
+on:
+  push:
+    branches: [arm-supervisor]
+  pull_request:
+    branches: [arm-supervisor]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: ''
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: TypeScript build and copy preload assets
+        run: npm run build
+      - name: Enforce module dependency direction
+        run: npm run check:architecture
+      - name: Run full test suite
+        run: npm test

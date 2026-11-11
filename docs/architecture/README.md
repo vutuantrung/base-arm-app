@@ -1,3 +1,8 @@
+## Phase R6 — Composition Root and Enforcement
+
+- [Phase R6 — Composition Root and Dependency Enforcement](../PHASE_R6_COMPOSITION_ROOT_AND_ENFORCEMENT.md)
+- [ADR-R6-001 — Composition Root and Dependency Gate](./ADR-R6-001-COMPOSITION-ROOT.md)
+
 ## Phase R5 — ARM SDK and Runtime Injection
 
 - [Phase R5 — ARM Runtime & SDK Consolidation](../PHASE_R5_ARM_RUNTIME_SDK_CONSOLIDATION.md)

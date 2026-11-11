@@ -1,3 +1,17 @@
+## Phase R6 — Composition Root & Dependency Enforcement
+
+`@arm/supervisor-host` now owns the Management daemon's dependency graph,
+startup, recovery-before-API, and reverse-order shutdown. The previous CLI is
+a thin environment/signal adapter. A new `npm run check:architecture` enforces
+package dependency directions; `npm run verify` performs build, boundary check
+and full regression tests. GitHub Actions runs the same checks for
+`arm-supervisor`.
+
+See [Phase R6](docs/PHASE_R6_COMPOSITION_ROOT_AND_ENFORCEMENT.md) and
+[ADR-R6-001](docs/architecture/ADR-R6-001-COMPOSITION-ROOT.md).
+**Source implementation does not imply passing tests or global application
+operation serialization.** Run verification before deploying.
+
 ## Phase R5 — ARM Runtime & SDK Consolidation
 
 The embedded ARM SDK is now owned by `@arm/client-sdk`, and Phase 8/9
