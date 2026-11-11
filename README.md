@@ -1,3 +1,19 @@
+## Phase R3 — Package & Deployment Extraction
+
+Package installation and immutable ZIP releases now live in
+[`packages/package-manager`](packages/package-manager/README.md);
+release selection, history, audit and journaled rollout live in
+[`packages/deployment-manager`](packages/deployment-manager/README.md).
+Existing `adapter-process` paths remain compatibility re-exports.
+
+Both packages expose typed R1 contract adapters: `PackageCatalogAdapter`
+and `ReleaseSelectorAdapter`. Deployment uses runtime ports, not a concrete
+`ApplicationRuntimeMonitor` import.
+
+See [Phase R3](docs/PHASE_R3_PACKAGE_AND_DEPLOYMENT_EXTRACTION.md) and
+[ADR-R3-001](docs/architecture/ADR-R3-001-PACKAGE-DEPLOYMENT.md).
+No behavior or persisted schema changes are intended; run build/tests locally.
+
 ## Phase R2 — Extracted Process Management module
 
 The durable process implementation now lives in

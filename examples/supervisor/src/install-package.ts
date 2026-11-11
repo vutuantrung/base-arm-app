@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { resolve } from 'node:path';
-import { DeploymentManager } from '../../../packages/adapter-process/src/deployment/deployment-manager.js';
+import { DeploymentManager } from '../../../packages/package-manager/src/index.js';
 
 async function main(): Promise<void> {
   const archivePath = process.argv[2];

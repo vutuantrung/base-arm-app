@@ -1,9 +1,9 @@
 import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { ApplicationStorage } from './deployment/application-storage.js';
-import { validateApplicationManifest } from './deployment/application-package-validator.js';
-import type { InstalledRelease } from './deployment/deployment-types.js';
+import { ApplicationStorage } from '../../package-manager/src/index.js';
+import { validateApplicationManifest } from '../../package-manager/src/index.js';
+import type { InstalledRelease } from '../../package-manager/src/index.js';
 import { ProcessManager, type ProcessSpec, type ProcessView } from '../../process-manager/src/index.js';
 import { ArmRuntimeInjector } from './arm-runtime-injector.js';
 import { ApplicationConfigurationStore } from './application-configuration-store.js';

@@ -1,0 +1,12 @@
+export { ApplicationReleaseManager } from './application-release-manager.js';
+export type { ReleaseManagementOptions } from './application-release-manager.js';
+export { SafeRolloutManager } from './safe-rollout-manager.js';
+export type { SafeRolloutOptions, StartRolloutRequest } from './safe-rollout-manager.js';
+export { ReleaseHistoryStore } from './release-history-store.js';
+export type { ReleaseTransition } from './release-history-store.js';
+export { DeploymentAuditLog } from './deployment-audit-log.js';
+export type { DeploymentAuditAction, DeploymentAuditOutcome, DeploymentAuditEntry } from './deployment-audit-log.js';
+export { RolloutJournal } from './rollout-journal.js';
+export type { RolloutPhase, RolloutOperation } from './rollout-journal.js';
+export { ReleaseSelectorAdapter } from './release-selector-adapter.js';
+export type { ReleaseRuntimePort, RolloutRuntimePort, ReleaseOperationsPort } from './runtime-ports.js';

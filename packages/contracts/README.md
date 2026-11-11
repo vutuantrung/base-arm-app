@@ -14,3 +14,11 @@ add runtime dependencies or OS process/HTTP server objects to public
 contract data transfer objects.
 
 Architecture and ownership: [Phase R1](../../../docs/PHASE_R1_MODULE_BOUNDARIES_AND_CONTRACTS.md).
+
+## Phase R3 update
+
+`PackageCatalog` is now implemented by `PackageCatalogAdapter` in
+`packages/package-manager`. `ReleaseSelector` is implemented by
+`ReleaseSelectorAdapter` in `packages/deployment-manager`.
+These are explicit opt-in adapters; existing application lifecycle callers
+have not all migrated to contracts yet.

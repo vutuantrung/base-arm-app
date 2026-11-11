@@ -4,8 +4,8 @@ import { ApplicationLifecycleManager } from '../../../packages/adapter-process/s
 import { ApplicationRuntimeMonitor } from '../../../packages/adapter-process/src/application-runtime-monitor.js';
 import { ApplicationManagementApi } from '../../../packages/adapter-process/src/application-management-api.js';
 import { RuntimeStateStore } from '../../../packages/adapter-process/src/runtime-state-store.js';
-import { ApplicationReleaseManager } from '../../../packages/adapter-process/src/application-release-manager.js';
-import { SafeRolloutManager } from '../../../packages/adapter-process/src/safe-rollout-manager.js';
+import { ApplicationReleaseManager } from '../../../packages/deployment-manager/src/index.js';
+import { SafeRolloutManager } from '../../../packages/deployment-manager/src/index.js';
 import { BlueGreenDeploymentManager } from '../../../packages/adapter-process/src/blue-green-deployment-manager.js';
 import { ArmRuntimeInjector } from '../../../packages/adapter-process/src/arm-runtime-injector.js';
 import { ArmTelemetryReader } from '../../../packages/adapter-process/src/arm-telemetry-reader.js';

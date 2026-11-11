@@ -1,3 +1,8 @@
+## Phase R3 — Package & Deployment Extraction
+
+- [Phase R3 — Package & Deployment Extraction](../PHASE_R3_PACKAGE_AND_DEPLOYMENT_EXTRACTION.md)
+- [ADR-R3-001 — Package/Deployment Ownership](./ADR-R3-001-PACKAGE-DEPLOYMENT.md)
+
 ## Phase R2 — Process Module Extraction
 
 - [Phase R2 Process Management Extraction](../PHASE_R2_PROCESS_MANAGEMENT_EXTRACTION.md)
