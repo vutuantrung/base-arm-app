@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events';
 import { readFile, rename, mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { ArmRuntimeInjector } from './arm-runtime-injector.js';
+import { ChildEnvironmentBuilder } from './child-environment-builder.js';
 
 export interface ProcessSpec {
   id: string;
@@ -10,6 +11,8 @@ export interface ProcessSpec {
   args?: string[];
   cwd?: string;
   env?: Record<string, string>;
+  /** Optional business configuration; never allowed to override reserved runtime keys. */
+  applicationEnv?: Record<string, string>;
   /** ARM WebSocket endpoint provided by the child app. */
   metricsUrl?: string;
   /** Bearer token if its ARM MetricsServer requires authentication. */
@@ -68,7 +71,11 @@ export class ProcessManager extends EventEmitter {
   private initialized = false;
   private persistQueue: Promise<void> = Promise.resolve();
 
-  constructor(private readonly stateFile: string, private readonly injector?: ArmRuntimeInjector) {
+  constructor(
+    private readonly stateFile: string,
+    private readonly injector?: ArmRuntimeInjector,
+    private readonly environmentBuilder: ChildEnvironmentBuilder = new ChildEnvironmentBuilder(),
+  ) {
     super();
   }
 
@@ -223,11 +230,15 @@ export class ProcessManager extends EventEmitter {
   private async launch(id: string, spec: ProcessSpec): Promise<ManagedProcessState> {
       const applicationId = spec.env?.ARM_APPLICATION_ID ?? spec.id;
       const instanceId = spec.env?.ARM_INSTANCE_ID ?? spec.id;
+      const childEnvironment = this.environmentBuilder.build({
+        applicationEnv: spec.applicationEnv,
+        runtimeEnv: spec.env,
+        injectionEnv: this.injector?.environment(applicationId, instanceId),
+      });
       const child = spawn(process.execPath, this.injector?.nodeArguments(spec.entry, spec.args, applicationId) ??
         [spec.entry, ...(spec.args ?? [])], {
         cwd: spec.cwd,
-        env: { ...process.env, ...spec.env,
-          ...this.injector?.environment(applicationId, instanceId) },
+        env: childEnvironment,
         detached: true,
         stdio: 'ignore',
         windowsHide: true,

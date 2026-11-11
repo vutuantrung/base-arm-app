@@ -29,7 +29,7 @@ export interface ApplicationLifecycleOptions {
   healthTimeoutMs?: number;
   /** Shared token for the deployed ARM metrics endpoint, if configured. */
   metricsToken?: string;
-  /** Additional *trusted* environment values. No untrusted manifest env is executed. */
+  /** Per-application business configuration; reserved Supervisor keys are rejected. */
   env?: Record<string, string>;
   injector?: ArmRuntimeInjector;
 }
@@ -183,8 +183,8 @@ export class ApplicationLifecycleManager {
       id: release.applicationId,
       entry: release.entry,
       cwd: release.directory,
+      applicationEnv: this.options.env,
       env: {
-        ...this.options.env,
         NODE_ENV: 'production',
         ARM_APPLICATION_ID: release.applicationId,
         ARM_INSTANCE_ID: `${release.applicationId}-managed`,

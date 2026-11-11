@@ -27,6 +27,8 @@ export interface BlueGreenOptions {
   healthTimeoutMs?: number;
   drainTimeoutMs?: number;
   injector?: ArmRuntimeInjector;
+  /** Per-application business settings, applied to each slot. */
+  applicationEnv?: Record<string, string>;
 }
 
 const APP_ID = /^[A-Za-z][A-Za-z0-9_.-]{0,55}$/;
@@ -197,6 +199,7 @@ export class BlueGreenDeploymentManager {
       id: this.processId(slot),
       entry: release.entry,
       cwd: release.directory,
+      applicationEnv: this.options.applicationEnv,
       env: {
         NODE_ENV: 'production',
         HOST: '127.0.0.1',

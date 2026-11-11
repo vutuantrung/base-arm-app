@@ -1,3 +1,14 @@
+## Child process environment isolation
+
+The Supervisor now creates each managed process environment through
+`ChildEnvironmentBuilder`, rather than passing its full `process.env` to child
+applications. Only essential OS variables are inherited. Business values come
+from per-application configuration; runtime and ARM injection variables are
+assigned by the Supervisor. Reserved keys are validated and rejected.
+
+The Supervisor root `.env` `PORT=3100` no longer overrides the HTTP port of
+singleton managed applications. See [Child Environment Builder](docs/CHILD_ENVIRONMENT_BUILDER.md).
+
 ## Environment configuration (.env)
 
 All Supervisor and example entrypoints automatically load `.env` from the
