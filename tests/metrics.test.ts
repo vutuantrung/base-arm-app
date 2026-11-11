@@ -30,7 +30,9 @@ test('HTTP snapshot, filtered websocket subscription and auth', async()=>{
   try {
     assert.equal((await fetch(`http://127.0.0.1:${port}/metrics`)).status,401);
     const response=await fetch(`http://127.0.0.1:${port}/metrics`,{headers:{authorization:'Bearer secret'}});
-    assert.equal(response.status,200);assert.equal((await response.json()).metrics.length,2);
+    assert.equal(response.status,200);
+    const snapshot = await response.json() as { metrics: unknown[] };
+    assert.equal(snapshot.metrics.length,2);
     const ws=new WebSocket(`ws://127.0.0.1:${port}/metrics/ws`,{headers:{authorization:'Bearer secret'}});
     await once(ws,'open');
     const messages: any[] = [];

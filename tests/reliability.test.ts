@@ -36,7 +36,8 @@ test('API component snapshot and WS event stream',async()=>{
   const url=`http://127.0.0.1:${addr.port}`;
   const ws=new WebSocket(`ws://127.0.0.1:${addr.port}/metrics/ws`);
   try {
-    assert.equal((await (await fetch(url+'/reliability/components')).json())[0].id,'db');
+    const components = await (await fetch(url+'/reliability/components')).json() as Array<{ id: string }>;
+    assert.equal(components[0].id,'db');
     assert.equal((await fetch(url+'/reliability/ready')).status,200);
     await once(ws,'open');
     const messages:any[]=[];ws.on('message',raw=>messages.push(JSON.parse(raw.toString())));
@@ -45,6 +46,7 @@ test('API component snapshot and WS event stream',async()=>{
     ok=false;await arm.checkAll();await arm.recover('db');
     await new Promise(r=>setTimeout(r,25));
     assert.ok(messages.some(x=>x.type==='reliability_event' && x.data.type==='recovery.succeeded'));
-    assert.ok((await (await fetch(url+'/reliability/events')).json()).events.length>0);
+    const events = await (await fetch(url+'/reliability/events')).json() as { events: unknown[] };
+    assert.ok(events.events.length>0);
   }finally{ws.terminate();await arm.stop();await server.stop();}
 });
