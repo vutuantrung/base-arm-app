@@ -79,7 +79,7 @@ test('remote collector subscribes to existing ARM WS protocol and reconnects', a
   });
 
   const collector = new RemoteArmMetricsCollector([
-    {id:'worker',entry:'unused',metricsUrl:`ws://127.0.0.1:${addr.port}/metrics/ws`},
+    {id:'worker',metricsUrl:`ws://127.0.0.1:${addr.port}/metrics/ws`},
   ], 100, 5000);
   try {
     collector.start();
