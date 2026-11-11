@@ -9,19 +9,49 @@ import { BlueGreenDeploymentManager } from '../../../packages/adapter-process/sr
 import { ArmRuntimeInjector } from '../../../packages/adapter-process/src/arm-runtime-injector.js';
 import { ArmTelemetryReader } from '../../../packages/adapter-process/src/arm-telemetry-reader.js';
 import { join } from 'node:path';
+import { ApplicationRegistry } from '../../../packages/adapter-process/src/application-registry.js';
+import { RemoteArmMetricsCollector } from '../../../packages/adapter-process/src/remote-arm-metrics-collector.js';
+import { ApplicationRegistrationServer } from '../../../packages/adapter-process/src/application-registration-server.js';
 
 async function main(): Promise<void> {
   const token = process.env.ARM_MANAGEMENT_TOKEN;
   if (!token) throw new Error('Set ARM_MANAGEMENT_TOKEN (at least 16 characters)');
   const storageRoot = resolve(process.env.ARM_DEPLOYMENT_ROOT ?? './supervisor-data');
-  const injectionEnabled = process.env.ARM_AUTO_INJECT === '1';
+  const bridgeApplicationId = process.env.ARM_CLIENT_BRIDGE_APP_ID;
+  const injectionEnabled = process.env.ARM_AUTO_INJECT === '1' || !!bridgeApplicationId;
+  const bridgeRegistrationPort = Number(process.env.ARM_BRIDGE_REGISTRATION_PORT ?? 3200);
+  const bridgeRegistrationToken = process.env.ARM_BRIDGE_REGISTRATION_TOKEN;
+  const bridgeMetricsToken = process.env.ARM_BRIDGE_METRICS_TOKEN;
   const telemetryRoot = join(storageRoot, 'telemetry');
   const injector = injectionEnabled ? new ArmRuntimeInjector({
-    mode: 'automatic',
+    mode: bridgeApplicationId ? 'bridge' : 'automatic',
     telemetryRoot,
+    ...(bridgeApplicationId ? {
+      bridgeApplicationId,
+      bridgeMetricsBasePort: Number(process.env.ARM_BRIDGE_METRICS_BASE_PORT ?? 3500),
+      bridgeRegistrationUrl: `http://127.0.0.1:${bridgeRegistrationPort}/`,
+      bridgeRegistrationToken,
+      bridgeMetricsToken,
+    } : {}),
     sampleIntervalMs: Number(process.env.ARM_TELEMETRY_INTERVAL_MS ?? 1000),
   }) : undefined;
   const telemetry = injectionEnabled ? new ArmTelemetryReader(telemetryRoot) : undefined;
+  const collector = bridgeApplicationId
+    ? new RemoteArmMetricsCollector([], 2000, 15000) : undefined;
+  const registry = collector
+    ? new ApplicationRegistry(collector, bridgeMetricsToken) : undefined;
+  const registrationServer = registry && collector && bridgeRegistrationToken
+    ? new ApplicationRegistrationServer(registry, collector, {
+        token: bridgeRegistrationToken,
+        port: bridgeRegistrationPort,
+      }) : undefined;
+  if (bridgeApplicationId && !registrationServer) {
+    throw new Error('ARM Client Bridge requires registration and metrics tokens');
+  }
+  if (registrationServer) {
+    collector!.start();
+    await registrationServer.start();
+  }
   const lifecycle = new ApplicationLifecycleManager({
     storageRoot,
     injector,
@@ -63,6 +93,8 @@ async function main(): Promise<void> {
     rolloutManager: rollout,
     blueGreenManager: blueGreen,
     telemetryReader: telemetry,
+    registrationRegistry: registry,
+    registrationCollector: collector,
     bearerToken: token,
     port: Number(process.env.ARM_MANAGEMENT_PORT ?? 3300),
   });
@@ -84,6 +116,9 @@ async function main(): Promise<void> {
     monitor.stopMonitoring();
     void api.stop().finally(async () => {
       await blueGreen?.close();
+      await registrationServer?.stop();
+      registry?.close();
+      collector?.stop();
       monitor.close();
     });
   };

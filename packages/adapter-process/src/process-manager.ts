@@ -223,7 +223,7 @@ export class ProcessManager extends EventEmitter {
   private async launch(id: string, spec: ProcessSpec): Promise<ManagedProcessState> {
       const applicationId = spec.env?.ARM_APPLICATION_ID ?? spec.id;
       const instanceId = spec.env?.ARM_INSTANCE_ID ?? spec.id;
-      const child = spawn(process.execPath, this.injector?.nodeArguments(spec.entry, spec.args) ??
+      const child = spawn(process.execPath, this.injector?.nodeArguments(spec.entry, spec.args, applicationId) ??
         [spec.entry, ...(spec.args ?? [])], {
         cwd: spec.cwd,
         env: { ...process.env, ...spec.env,

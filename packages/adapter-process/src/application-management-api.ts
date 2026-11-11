@@ -9,6 +9,8 @@ import type { ApplicationReleaseManager } from './application-release-manager.js
 import type { SafeRolloutManager } from './safe-rollout-manager.js';
 import type { BlueGreenDeploymentManager } from './blue-green-deployment-manager.js';
 import type { ArmTelemetryReader } from './arm-telemetry-reader.js';
+import type { ApplicationRegistry } from './application-registry.js';
+import type { RemoteArmMetricsCollector } from './remote-arm-metrics-collector.js';
 import { ApplicationRuntimeMonitor } from './application-runtime-monitor.js';
 
 export interface ApplicationManagementApiOptions {
@@ -21,6 +23,8 @@ export interface ApplicationManagementApiOptions {
   rolloutManager?: SafeRolloutManager;
   blueGreenManager?: BlueGreenDeploymentManager;
   telemetryReader?: ArmTelemetryReader;
+  registrationRegistry?: ApplicationRegistry;
+  registrationCollector?: RemoteArmMetricsCollector;
 }
 
 /** Loopback-only administrative API with explicit bearer authentication. */
@@ -135,6 +139,20 @@ export class ApplicationManagementApi {
         const body = await this.readJsonBody(req);
         if (typeof body.version !== 'string') throw new Error('Invalid release version');
         this.respond(res, 200, await bg.deploy(body.version));
+        return;
+      }
+      if (pathname === '/runtime/bridge/applications' && req.method === 'GET') {
+        const registry = this.options.registrationRegistry;
+        const collector = this.options.registrationCollector;
+        if (!registry || !collector) {
+          this.respond(res, 404, { error: 'bridge_disabled' });
+          return;
+        }
+        this.respond(res, 200, registry.list().map(app => ({
+          ...app,
+          monitoring: collector.get(app.id) ?? null,
+          fresh: collector.isFresh(app.id),
+        })));
         return;
       }
       const telemetryMatch = /^\/runtime\/instances\/([A-Za-z][A-Za-z0-9_.-]{0,63})\/telemetry$/.exec(pathname);

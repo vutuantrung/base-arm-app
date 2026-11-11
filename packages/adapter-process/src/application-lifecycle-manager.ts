@@ -174,6 +174,10 @@ export class ApplicationLifecycleManager {
   }
 
   private createProcessSpec(release: InstalledRelease): ProcessSpec {
+    if (release.manifest.arm.enabled &&
+      this.options.injector?.bridgeEnabledFor(release.applicationId)) {
+      throw new Error('ARM Client Bridge cannot replace an app with embedded ARM SDK');
+    }
     const port = release.manifest.arm.metricsPort;
     return {
       id: release.applicationId,

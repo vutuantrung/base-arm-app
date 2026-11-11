@@ -189,6 +189,10 @@ export class BlueGreenDeploymentManager {
   private async buildSpec(slot: Slot, version: string) {
     const release = await this.storage.readRelease(this.options.applicationId, version);
     if (!release) throw new Error('Installed release not found: ' + version);
+    if (release.manifest.arm.enabled &&
+      this.options.injector?.bridgeEnabledFor(this.options.applicationId)) {
+      throw new Error('ARM Client Bridge cannot replace an app with embedded ARM SDK');
+    }
     return {
       id: this.processId(slot),
       entry: release.entry,

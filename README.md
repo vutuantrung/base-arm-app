@@ -1,3 +1,23 @@
+## Phase 9 — ARM Client Runtime Bridge (opt-in)
+
+Node child processes can now start the **actual ARM Client SDK** through a
+Supervisor-owned `--import` preload. App ZIP files do not need `arm-client`
+dependencies. SDK registration and metrics WS/HTTP endpoints use existing
+ARM contracts and distinct per-instance ports.
+
+```bash
+npm run build
+export ARM_MANAGEMENT_TOKEN='replace-with-a-long-random-secret'
+export ARM_CLIENT_BRIDGE_APP_ID='payment-service'
+export ARM_BRIDGE_REGISTRATION_TOKEN='distinct-registration-secret-123'
+export ARM_BRIDGE_METRICS_TOKEN='distinct-metrics-secret-456'
+npm run dev:management
+```
+
+Inspect `GET /runtime/bridge/applications` with the management bearer token.
+This does not automatically supply business component registration or readiness.
+See [Phase 9 guide](docs/PHASE_9_ARM_CLIENT_RUNTIME_BRIDGE.md).
+
 ## Phase 8 — Supervisor-owned ARM runtime preload (opt-in)
 
 The Supervisor can inject a lightweight Node.js instrumentation runtime into new
