@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { resolve } from 'node:path';
 import { ApplicationLifecycleManager } from '../../../packages/adapter-process/src/application-lifecycle-manager.js';
 

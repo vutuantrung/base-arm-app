@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { ApplicationRegistrationClient } from '../../../packages/adapter-process/src/application-registration-client.js';
 import { MetricsRegistry, NodeMetricsCollector } from '../../../packages/core/src/metrics.js';
 import { ReliabilityManager, type ManagedComponent } from '../../../packages/core/src/reliability.js';

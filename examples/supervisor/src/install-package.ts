@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { resolve } from 'node:path';
 import { DeploymentManager } from '../../../packages/adapter-process/src/deployment/deployment-manager.js';
 
