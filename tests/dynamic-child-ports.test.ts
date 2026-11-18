@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { createServer } from 'node:net';
 import { ProcessManager } from '../packages/adapter-process/src/process-manager.js';
 import { ApplicationConfigurationStore } from '../packages/adapter-process/src/application-configuration-store.js';
+import { ChildEnvironmentBuilder } from '../packages/process-manager/src/child-environment-builder.js';
 import { ApplicationEndpointDiscovery } from '../packages/adapter-process/src/application-endpoint-discovery.js';
 import type { ApplicationRuntimeMonitor } from '../packages/adapter-process/src/application-runtime-monitor.js';
 
@@ -46,6 +47,14 @@ test('ApplicationConfigurationStore reads an optional application-specific PORT'
     const config = await store.read('payment-service');
     assert.equal(config.environment.PORT, '3201');
     assert.equal(config.environment.LOG_LEVEL, 'info');
+    assert.equal(store.pathFor('payment-service'), join(directory, 'application-config.json'));
+    await writeFile(join(directory, 'application-config.json'), '{ invalid json');
+    await assert.rejects(store.read('payment-service'), SyntaxError);
+    await writeFile(join(directory, 'application-config.json'), JSON.stringify({
+      schemaVersion: 1, environment: { ARM_PORT: '9999' },
+    }));
+    const reserved = await store.read('payment-service');
+    assert.throws(() => new ChildEnvironmentBuilder({}).build({ applicationEnv: reserved.environment }), /Reserved application/);
     await assert.rejects(store.read('../other'), /Invalid application ID/);
   } finally {
     await rm(root, { recursive: true, force: true });

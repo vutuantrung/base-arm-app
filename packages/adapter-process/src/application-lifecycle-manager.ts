@@ -93,14 +93,36 @@ export class ApplicationLifecycleManager {
     });
   }
 
+   // async startApplication(applicationId: string): Promise<ApplicationRuntimeView> {
+  //   this.assertInitialized();
+  //   return this.lock(applicationId, async () => {
+  //     const release = await this.requireActiveRelease(applicationId);
+  //     await this.processes.start(applicationId);
+  //     return this.getApplicationStatusForRelease(release);
+  //   });
+  // }
+
   async startApplication(applicationId: string): Promise<ApplicationRuntimeView> {
     this.assertInitialized();
     return this.lock(applicationId, async () => {
       const release = await this.requireActiveRelease(applicationId);
+      const current = await this.processes.inspect(applicationId);
+      if (current.status === 'STOPPED') {
+        await this.processes.registerSpec(await this.createProcessSpec(release));
+      }
       await this.processes.start(applicationId);
       return this.getApplicationStatusForRelease(release);
     });
   }
+
+  // async stopApplication(applicationId: string): Promise<ApplicationRuntimeView> {
+  //   this.assertInitialized();
+  //   return this.lock(applicationId, async () => {
+  //     const release = await this.requireActiveRelease(applicationId);
+  //     await this.processes.stop(applicationId, release.manifest.lifecycle.stopTimeoutMs);
+  //     return this.getApplicationStatusForRelease(release);
+  //   });
+  // }
 
   async stopApplication(applicationId: string): Promise<ApplicationRuntimeView> {
     this.assertInitialized();
@@ -111,11 +133,23 @@ export class ApplicationLifecycleManager {
     });
   }
 
+  // async restartApplication(applicationId: string): Promise<ApplicationRuntimeView> {
+  //   this.assertInitialized();
+  //   return this.lock(applicationId, async () => {
+  //     const release = await this.requireActiveRelease(applicationId);
+  //     await this.processes.restart(applicationId, release.manifest.lifecycle.stopTimeoutMs);
+  //     return this.getApplicationStatusForRelease(release);
+  //   });
+  // }
+
   async restartApplication(applicationId: string): Promise<ApplicationRuntimeView> {
     this.assertInitialized();
     return this.lock(applicationId, async () => {
       const release = await this.requireActiveRelease(applicationId);
-      await this.processes.restart(applicationId, release.manifest.lifecycle.stopTimeoutMs);
+      const refreshedSpec = await this.createProcessSpec(release);
+      await this.processes.stop(applicationId, release.manifest.lifecycle.stopTimeoutMs);
+      await this.processes.registerSpec(refreshedSpec);
+      await this.processes.start(applicationId);
       return this.getApplicationStatusForRelease(release);
     });
   }

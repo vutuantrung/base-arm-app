@@ -1,0 +1,87 @@
+[
+    {
+        "applicationId": "payment-service",
+        "instanceId": "payment-service-managed",
+        "metricsUrl": "ws://127.0.0.1:3500/metrics/ws",
+        "id": "payment-service/payment-service-managed",
+        "registeredAt": "2026-11-11T04:42:16.792Z",
+        "lastSeenAt": "2026-11-11T04:44:01.789Z",
+        "expiresAt": "2026-11-11T04:44:46.789Z",
+        "status": "CONNECTED",
+        "statusChangedAt": "2026-11-11T04:42:16.802Z",
+        "processStatus": "UNKNOWN",
+        "management": "monitor-only",
+        "monitoring": {
+            "id": "payment-service/payment-service-managed",
+            "connected": true,
+            "metrics": [
+                {
+                    "name": "process.uptime_seconds",
+                    "type": "gauge",
+                    "value": 105.185519583,
+                    "unit": "seconds",
+                    "timestamp": "2026-11-11T04:44:01.803Z"
+                },
+                {
+                    "name": "process.memory.rss_bytes",
+                    "type": "gauge",
+                    "value": 89108480,
+                    "unit": "bytes",
+                    "timestamp": "2026-11-11T04:44:01.803Z"
+                },
+                {
+                    "name": "process.memory.heap_used_bytes",
+                    "type": "gauge",
+                    "value": 11187736,
+                    "unit": "bytes",
+                    "timestamp": "2026-11-11T04:44:01.803Z"
+                },
+                {
+                    "name": "process.memory.heap_total_bytes",
+                    "type": "gauge",
+                    "value": 12668928,
+                    "unit": "bytes",
+                    "timestamp": "2026-11-11T04:44:01.803Z"
+                },
+                {
+                    "name": "process.cpu.percent_of_one_core",
+                    "type": "gauge",
+                    "value": 1.1246702682167895,
+                    "unit": "percent",
+                    "timestamp": "2026-11-11T04:44:01.803Z"
+                },
+                {
+                    "name": "runtime.event_loop.mean_delay_ms",
+                    "type": "gauge",
+                    "value": 20.10233208163265,
+                    "unit": "milliseconds",
+                    "timestamp": "2026-11-11T04:44:01.803Z"
+                },
+                {
+                    "name": "host.memory.total_bytes",
+                    "type": "gauge",
+                    "value": 15440953344,
+                    "unit": "bytes",
+                    "timestamp": "2026-11-11T04:44:01.803Z"
+                },
+                {
+                    "name": "host.memory.free_bytes",
+                    "type": "gauge",
+                    "value": 6186844160,
+                    "unit": "bytes",
+                    "timestamp": "2026-11-11T04:44:01.803Z"
+                },
+                {
+                    "name": "host.cpu.logical_cores",
+                    "type": "gauge",
+                    "value": 12,
+                    "unit": "count",
+                    "timestamp": "2026-11-11T04:44:01.806Z"
+                }
+            ],
+            "connectedAt": "2026-11-11T04:42:16.802Z",
+            "lastSnapshotAt": "2026-11-11T04:44:01.812Z"
+        },
+        "fresh": true
+    }
+]

@@ -1,0 +1,214 @@
+/////////////////////////////////////
+// CONFIG
+/////////////////////////////////////
+
+export TEST_KIT_DIR=~/Working/Local_localProjects/external-git/payment-service-phase1-test-kit
+
+export ARM_MANAGEMENT_TOKEN="my-supervisor-secret-token"
+export ARM_CLIENT_BRIDGE_APP_ID="payment-service"
+export ARM_BRIDGE_REGISTRATION_TOKEN="distinct-registration-secret-123"
+export ARM_BRIDGE_METRICS_TOKEN="distinct-metrics-secret-456"
+export ARM_BRIDGE_REGISTRATION_PORT=3200
+export ARM_BRIDGE_METRICS_BASE_PORT=3500
+export TOKEN="my-supervisor-secret-token"
+export BASE=http://127.0.0.1:3300
+export TEST_KIT_DIR=~/Working/Local_localProjects/external-git/base-aa-backend/arm-packages
+
+npm run dev:management
+
+curl http://127.0.0.1:3201/health
+
+
+/////////////////////////////////////
+// CURL_FOR_TEST
+/////////////////////////////////////
+
+curl -X POST \
+  $BASE/deployments/upload \
+  -H "Authorization: Bearer $ARM_MANAGEMENT_TOKEN" \
+  -H "Content-Type: application/zip" \
+  --data-binary @$TEST_KIT_DIR/payment-service-1.0.0.zip
+
+curl -X POST \
+  $BASE/deployments/upload \
+  -H "Authorization: Bearer $ARM_MANAGEMENT_TOKEN" \
+  -H "Content-Type: application/zip" \
+  --data-binary @$TEST_KIT_DIR/eserver-2-1.0.0.zip
+
+curl \
+  -H "Authorization: Bearer $ARM_MANAGEMENT_TOKEN" \
+  $BASE/applications/aab/releases
+
+curl \
+  -H "Authorization: Bearer $ARM_MANAGEMENT_TOKEN" \
+  $BASE/applications/eserver-2/releases
+
+curl -X POST \
+  $BASE/applications/eserver-1/activate \
+  -H "Authorization: Bearer $ARM_MANAGEMENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"version":"1.0.0"}'
+
+curl -X POST \
+  $BASE/applications/eserver-2/activate \
+  -H "Authorization: Bearer $ARM_MANAGEMENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"version":"1.0.0"}'
+
+curl -X POST -H "Authorization: Bearer $ARM_MANAGEMENT_TOKEN" $BASE/applications/aab/start
+curl -X POST -H "Authorization: Bearer $ARM_MANAGEMENT_TOKEN" $BASE/applications/eserver-2/start
+curl -X POST -H "Authorization: Bearer $ARM_MANAGEMENT_TOKEN" $BASE/applications/eserver-2/stop
+curl -X POST -H "Authorization: Bearer $ARM_MANAGEMENT_TOKEN" $BASE/applications/aab/stop
+
+curl -X GET -H "Authorization: Bearer $ARM_MANAGEMENT_TOKEN" $BASE/applications/payment-service/audit (chỉ dùng cho install child app)
+
+curl "$BASE/applications/aab" -H "Authorization: Bearer $ARM_MANAGEMENT_TOKEN"
+
+ps -p 62880 -o pid,ppid,stat,cmd
+
+cd /home/parker/Working/Local_localProjects/external-git/base-arm-app/supervisor-data/applications/eserver-2
+
+
+curl -i -X POST \
+  "$BASE/applications/payment-service/rollout" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"version":"1.1.0","allowProcessOnly":true}'
+
+curl \
+  -H "Authorization: Bearer $ARM_MANAGEMENT_TOKEN" \
+  http://127.0.0.1:3300/runtime/instances/payment-service-managed/telemetry
+
+curl \
+  -H "Authorization: Bearer $ARM_MANAGEMENT_TOKEN" \
+  http://127.0.0.1:3300/runtime/instances/aab-managed/telemetry
+
+curl -H "Authorization: Bearer $TOKEN" \
+  "$BASE/runtime/bridge/applications"
+
+- có bao nhiêu phase result cần lưu ý + cách log
+- chia nhỏ các module cho dễ maintain
+
+[IMPORTANT] các câu hỏi trước khi phát triển bước tiếp theo:
+- tác động của lần cập nhật này lên các dependencies/library đã tạo
+
+Phase R1 — Define Module Boundaries & Contracts
+Xác định public interfaces, data ownership và dependency rules. Chưa thay đổi behavior.
+
+
+Phase R2 — Extract Process Management
+Tách ProcessManager, ChildEnvironmentBuilder, DynamicPortAllocator và OS-specific adapters. Đây là nhóm nên làm trước vì được nhiều module khác sử dụng.
+
+
+Phase R3 — Extract Deployment & Package Management
+Tách installation, release selection, rollout và history. Mỗi phần có contract và test riêng.
+
+
+Phase R4 — Extract Monitoring, Discovery & Routing
+Tách monitoring/recovery, endpoint discovery và Blue/Green proxy, không để các module trực tiếp can thiệp state nội bộ của nhau.
+
+
+Phase R5 — Unify ARM Client and Supervisor Runtime
+Đưa ARM SDK vào package độc lập, version hóa thay vì duy trì logic tương ứng trên hai nhánh Git lâu dài.
+
+
+Phase R6 — Composition Root & Architecture Enforcement
+Supervisor Host lắp ráp dependencies, kiểm tra dependency graph, chạy contract tests và integration tests.
+
+
+Superapp (supervisor)
+- Nhận package App nodejs (child process) [ok]
+- Check release(s) child process [ok]
+- Deployment child process [ok]
+- Rollback child process [ok]
+- Tích hợp Khả năng quản lý child process kiểu Electron app [pending]
+
+AA UI (Mono)
+
+AA Backend
+- Kết nối Platform socket io [in progress]
+- Kết nối AA UI (HTTP API) [in progress]
+- Tích hợp luồng mở browser cũ [in progress]
+- nhận luồng task theo: Platform -> AA Backend -> AA UI -> Browser [pending]
+  + nhận avatar config -> mở browser [pending]
+
+Extension
+- Refactor code [in progress]
+- Kết nối ws tới AA Backend [pending]
+
+
+APP REQUIREMENT
+[Git repository] https://github.com/vutuantrung/base-aa-backend
+[Technologies] Typescript, Express, Socket io, Sqlite
+[Requirement] Extendable app, Business boudaries separation
+[Features]
+- Socket io connected (multiple channels: session, worker)
+- HTTP Server API
+- Local db server Sqlite (table Session(id, name); table ProcessUsage(id, pid, cpu, memory))
+- Connectable interface for sending message to socket io server and http api server
+- Fowarder between Socket io endpoint, HTTP API endpoint and reverse
+- Scheduling tasks setup
+- Launch browser with configuration
+
+
+
+  // async startApplication(applicationId: string): Promise<ApplicationRuntimeView> {
+  //   this.assertInitialized();
+  //   return this.lock(applicationId, async () => {
+  //     const release = await this.requireActiveRelease(applicationId);
+  //     await this.processes.start(applicationId);
+  //     return this.getApplicationStatusForRelease(release);
+  //   });
+  // }
+
+  async startApplication(applicationId: string): Promise<ApplicationRuntimeView> {
+    this.assertInitialized();
+    return this.lock(applicationId, async () => {
+      const release = await this.requireActiveRelease(applicationId);
+      const current = await this.processes.inspect(applicationId);
+      if (current.status === 'STOPPED') {
+        await this.processes.registerSpec(await this.createProcessSpec(release));
+      }
+      await this.processes.start(applicationId);
+      return this.getApplicationStatusForRelease(release);
+    });
+  }
+
+  // async stopApplication(applicationId: string): Promise<ApplicationRuntimeView> {
+  //   this.assertInitialized();
+  //   return this.lock(applicationId, async () => {
+  //     const release = await this.requireActiveRelease(applicationId);
+  //     await this.processes.stop(applicationId, release.manifest.lifecycle.stopTimeoutMs);
+  //     return this.getApplicationStatusForRelease(release);
+  //   });
+  // }
+
+  async stopApplication(applicationId: string): Promise<ApplicationRuntimeView> {
+    this.assertInitialized();
+    return this.lock(applicationId, async () => {
+      const release = await this.requireActiveRelease(applicationId);
+      await this.processes.stop(applicationId, release.manifest.lifecycle.stopTimeoutMs);
+      return this.getApplicationStatusForRelease(release);
+    });
+  }
+
+  // async restartApplication(applicationId: string): Promise<ApplicationRuntimeView> {
+  //   this.assertInitialized();
+  //   return this.lock(applicationId, async () => {
+  //     const release = await this.requireActiveRelease(applicationId);
+  //     await this.processes.restart(applicationId, release.manifest.lifecycle.stopTimeoutMs);
+  //     return this.getApplicationStatusForRelease(release);
+  //   });
+  // }
+
+  async restartApplication(applicationId: string): Promise<ApplicationRuntimeView> {
+    this.assertInitialized();
+    return this.lock(applicationId, async () => {
+      const release = await this.requireActiveRelease(applicationId);
+      const refreshedSpec = await this.createProcessSpec(release);
+      await this.processes.stop(applicationId, release.manifest.lifecycle.stopTimeoutMs);
+      await this.processes.registerSpec(refreshedSpec);
+      await this.processes.start(applicationId);
+      return this.getApplicationStatusForRelease(release);
+    });
+  }
