@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { ApplicationStorage } from '../../package-manager/src/index.js';
 import { validateApplicationManifest } from '../../package-manager/src/index.js';
 import type { InstalledRelease } from '../../package-manager/src/index.js';
-import { ProcessManager, type ProcessSpec, type ProcessView } from '../../process-manager/src/index.js';
+import { ProcessManager, type ProcessSpec, type ProcessView, type ChildProcessLogs } from '../../process-manager/src/index.js';
 import { ArmRuntimeInjector } from '../../runtime-injection/src/index.js';
 import { ApplicationConfigurationStore } from './application-configuration-store.js';
 
@@ -35,6 +35,7 @@ export interface ApplicationLifecycleOptions {
   /** Supervisor-owned values, including restricted discovery credentials. */
   runtimeEnv?: Record<string, string>;
   injector?: ArmRuntimeInjector;
+  logs?: ChildProcessLogs;
 }
 
 const APPLICATION_ID = /^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$/;
@@ -59,7 +60,7 @@ export class ApplicationLifecycleManager {
     this.configurations = new ApplicationConfigurationStore(this.storage.root);
     this.processes = new ProcessManager(
       options.processStateFile ?? join(this.storage.root, 'state', 'processes.json'),
-      options.injector,
+      options.injector, undefined, options.logs,
     );
   }
 
@@ -188,6 +189,7 @@ export class ApplicationLifecycleManager {
     return {
       id: release.applicationId,
       entry: release.entry,
+      releaseVersion: release.version,
       cwd: release.directory,
       applicationEnv: { ...config.environment, ...this.options.env },
       env: {

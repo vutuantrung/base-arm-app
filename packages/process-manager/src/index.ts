@@ -5,3 +5,5 @@ export { ChildEnvironmentBuilder } from './child-environment-builder.js';
 export type { ChildEnvironmentInput } from './child-environment-builder.js';
 export { DynamicPortAllocator } from './dynamic-port-allocator.js';
 export type { ProcessLaunchInstrumentation } from './process-launch-instrumentation.js';
+export { ChildProcessLogs } from './child-process-logs.js';
+export type { ProcessLogStream, ProcessLogTail } from './child-process-logs.js';

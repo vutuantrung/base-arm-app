@@ -1,3 +1,7 @@
+## Child Process Logging & Diagnostics (opt-in)
+
+Set `ARM_CHILD_LOGGING=1` in the Supervisor `.env`, restart the Supervisor, then restart the desired child through Management API. Each new launch writes separate stdout, stderr and diagnostic records under `supervisor-data/logs/<processId>/<runId>/`. Existing detached children are not retroactively redirected. See [Child Process Logging](docs/CHILD_PROCESS_LOGGING.md).
+
 ## Phase R6 — Composition Root & Dependency Enforcement
 
 `@arm/supervisor-host` now owns the Management daemon's dependency graph,

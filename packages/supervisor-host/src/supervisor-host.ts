@@ -1,4 +1,5 @@
 import { resolve, join } from 'node:path';
+import { ChildProcessLogs } from '../../process-manager/src/index.js';
 import { ApplicationLifecycleManager } from '../../adapter-process/src/application-lifecycle-manager.js';
 import { ApplicationManagementApi } from '../../adapter-process/src/application-management-api.js';
 import { BlueGreenDeploymentManager } from '../../adapter-process/src/blue-green-deployment-manager.js';
@@ -65,6 +66,7 @@ export class SupervisorHost {
     const bridgeMetricsToken = env.ARM_BRIDGE_METRICS_TOKEN;
     const injectionEnabled = env.ARM_AUTO_INJECT === '1' || !!bridgeId;
     const telemetryRoot = join(storageRoot, 'telemetry');
+    const logs = env.ARM_CHILD_LOGGING === '1' ? new ChildProcessLogs(join(storageRoot, 'logs')) : undefined;
     const runtimeEnv = env.ARM_DISCOVERY_TOKEN ? {
       ARM_DISCOVERY_URL: `http://127.0.0.1:${managementPort}`,
       ARM_DISCOVERY_TOKEN: env.ARM_DISCOVERY_TOKEN,
@@ -96,7 +98,7 @@ export class SupervisorHost {
     }
 
     this.lifecycle = new ApplicationLifecycleManager({
-      storageRoot, injector, metricsToken: env.ARM_METRICS_TOKEN, runtimeEnv,
+      storageRoot, injector, logs, metricsToken: env.ARM_METRICS_TOKEN, runtimeEnv,
     });
     this.monitor = new ApplicationRuntimeMonitor(this.lifecycle, {
       intervalMs: this.readPositiveInteger(env.ARM_MONITOR_INTERVAL_MS, 1000),
@@ -111,7 +113,7 @@ export class SupervisorHost {
 
     // Blue/Green remains a deployment coordinator, not a traffic adapter.
     this.blueGreen = env.ARM_BLUE_GREEN_APP_ID ? new BlueGreenDeploymentManager({
-      storageRoot, injector, runtimeEnv,
+      storageRoot, injector, logs, runtimeEnv,
       applicationId: env.ARM_BLUE_GREEN_APP_ID,
       proxyPort: this.readPort(env.ARM_PROXY_PORT, 3400),
       ...(env.ARM_BLUE_PORT ? { bluePort: this.readPort(env.ARM_BLUE_PORT, 3401) } : {}),
@@ -124,6 +126,7 @@ export class SupervisorHost {
       rolloutManager: this.rollout,
       blueGreenManager: this.blueGreen,
       telemetryReader: telemetry,
+      childLogs: logs,
       registrationRegistry: this.registry,
       registrationCollector: this.collector,
       endpointDiscovery: this.endpoints,

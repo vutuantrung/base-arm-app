@@ -12,6 +12,7 @@ import type { ArmTelemetryReader } from '../../runtime-injection/src/index.js';
 import type { ApplicationRegistry } from '../../service-discovery/src/index.js';
 import type { RemoteArmMetricsCollector } from '../../service-discovery/src/index.js';
 import { ApplicationRuntimeMonitor } from '../../runtime-monitor/src/index.js';
+import type { ChildProcessLogs } from '../../process-manager/src/index.js';
 import type { ApplicationEndpointDiscovery } from '../../service-discovery/src/index.js';
 
 export interface ApplicationManagementApiOptions {
@@ -28,6 +29,7 @@ export interface ApplicationManagementApiOptions {
   registrationCollector?: RemoteArmMetricsCollector;
   endpointDiscovery?: ApplicationEndpointDiscovery;
   discoveryToken?: string;
+  childLogs?: ChildProcessLogs;
 }
 
 /** Loopback-only administrative API with explicit bearer authentication. */
@@ -84,7 +86,8 @@ export class ApplicationManagementApi {
   }
 
   private async handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    const pathname = new URL(req.url ?? '/', 'http://localhost').pathname;
+    const url = new URL(req.url ?? '/', 'http://localhost');
+    const pathname = url.pathname;
     const discovery = /^\/runtime\/endpoints(?:\/([A-Za-z][A-Za-z0-9_.-]{0,63}))?$/.exec(pathname);
     if (discovery && req.method === 'GET') {
       if (!this.isAuthorized(req) &&
@@ -112,6 +115,11 @@ export class ApplicationManagementApi {
       return;
     }
     try {
+      const logsMatch = /^\/runtime\/processes\/([A-Za-z][A-Za-z0-9_.-]{0,63})\/logs(?:\/(stdout|stderr|diagnostics))?$/.exec(pathname);
+      if (logsMatch && req.method === 'GET') {
+        await this.handleChildLogs(res, logsMatch[1], logsMatch[2], url.searchParams);
+        return;
+      }
       if (pathname === '/deployments/upload' && req.method === 'POST') {
         if (!this.options.releaseManager) throw new Error('Deployment API unavailable');
         this.respond(res, 201, await this.handleZipUpload(req));
@@ -227,6 +235,22 @@ export class ApplicationManagementApi {
         { error: tooLarge ? 'payload_too_large' : invalid ? 'bad_request' : conflict ? 'conflict' : notFound ? 'not_found' : 'internal_error',
           message: tooLarge || invalid || conflict || notFound ? message : undefined });
     }
+  }
+
+  private async handleChildLogs(res: ServerResponse, id: string, stream: string | undefined,
+    query: URLSearchParams): Promise<void> {
+    const logs = this.options.childLogs;
+    if (!logs) { this.respond(res, 404, { error: 'child_logging_disabled' }); return; }
+    if (!stream) {
+      this.respond(res, 200, { processId: id, runs: await logs.listRuns(id) });
+      return;
+    }
+    if (stream !== 'stdout' && stream !== 'stderr' && stream !== 'diagnostics') {
+      throw new Error('Invalid log stream');
+    }
+    const result = await logs.readTail(id, stream, Number(query.get('bytes') ?? 16384),
+      query.get('run') ?? undefined);
+    this.respond(res, result ? 200 : 404, result ?? { error: 'not_found' });
   }
 
   private async executeAction(

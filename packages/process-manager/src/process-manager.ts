@@ -5,6 +5,7 @@ import { dirname } from 'node:path';
 import type { ProcessLaunchInstrumentation } from './process-launch-instrumentation.js';
 import { ChildEnvironmentBuilder } from './child-environment-builder.js';
 import { DynamicPortAllocator } from './dynamic-port-allocator.js';
+import type { ChildProcessLogs, ProcessLogSession } from './child-process-logs.js';
 
 export interface ProcessSpec {
   id: string;
@@ -18,6 +19,8 @@ export interface ProcessSpec {
   metricsUrl?: string;
   /** Bearer token if its ARM MetricsServer requires authentication. */
   metricsToken?: string;
+  /** Optional release identity for launch diagnostics. */
+  releaseVersion?: string;
 }
 
 export interface ManagedProcessState {
@@ -80,6 +83,7 @@ export class ProcessManager extends EventEmitter {
     private readonly stateFile: string,
     private readonly injector?: ProcessLaunchInstrumentation,
     private readonly environmentBuilder: ChildEnvironmentBuilder = new ChildEnvironmentBuilder(),
+    private readonly logs?: ChildProcessLogs,
   ) {
     super();
   }
@@ -280,7 +284,9 @@ export class ProcessManager extends EventEmitter {
       port = await this.ports.allocate();
     }
     let child: ChildProcess | undefined;
+    let log: ProcessLogSession | undefined;
     try {
+      log = this.logs?.openLaunch(id, applicationId, instanceId, spec.releaseVersion);
       const childEnvironment = this.environmentBuilder.build({
         applicationEnv: spec.applicationEnv,
         runtimeEnv: { ...spec.env, PORT: String(port), HOST: spec.env?.HOST ?? '127.0.0.1' },
@@ -294,14 +300,17 @@ export class ProcessManager extends EventEmitter {
           cwd: spec.cwd,
           env: childEnvironment,
           detached: true,
-          stdio: 'ignore',
+          stdio: log ? ['ignore', log.stdout, log.stderr] : 'ignore',
           windowsHide: true,
         });
+      log?.closeParentDescriptors();
+      child.once('exit', (code, signal) => log?.record('exit', { pid: child?.pid, code, signal }));
       await new Promise<void>((resolve, reject) => {
         child!.once('spawn', resolve);
         child!.once('error', reject);
       });
       if (!child.pid) throw new Error('Spawn did not return a PID');
+      log?.record('spawned', { pid: child.pid });
       child.unref();
       const state: ManagedProcessState = {
         id, pid: child.pid, port, startedAt: new Date().toISOString(),
@@ -322,8 +331,12 @@ export class ProcessManager extends EventEmitter {
       this.emit('started', { ...state });
       return state;
     } catch (error) {
+      log?.record('launch_failed', { code: error instanceof Error && 'code' in error &&
+        typeof error.code === 'string' ? error.code : 'LAUNCH_FAILED' });
       this.ports.release(port);
       throw error;
+    } finally {
+      log?.closeParentDescriptors();
     }
   }
 

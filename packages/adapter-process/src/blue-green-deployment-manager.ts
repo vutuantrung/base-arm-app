@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { ProcessManager, type ProcessView } from '../../process-manager/src/index.js';
+import { ProcessManager, type ProcessView, type ChildProcessLogs } from '../../process-manager/src/index.js';
 import { ArmRuntimeInjector } from '../../runtime-injection/src/index.js';
 import { ApplicationStorage } from '../../package-manager/src/index.js';
 import { ApplicationConfigurationStore } from './application-configuration-store.js';
@@ -28,6 +28,7 @@ export interface BlueGreenOptions {
   healthTimeoutMs?: number;
   drainTimeoutMs?: number;
   injector?: ArmRuntimeInjector;
+  logs?: ChildProcessLogs;
   /** Per-application business settings, applied to each slot. */
   applicationEnv?: Record<string, string>;
   runtimeEnv?: Record<string, string>;
@@ -68,7 +69,7 @@ export class BlueGreenDeploymentManager {
     this.requestedPorts = { blue: options.bluePort, green: options.greenPort };
     this.storage = new ApplicationStorage(options.storageRoot);
     this.configurations = new ApplicationConfigurationStore(this.storage.root);
-    this.processes = new ProcessManager(join(this.storage.root, 'state', 'blue-green-processes.json'), options.injector);
+    this.processes = new ProcessManager(join(this.storage.root, 'state', 'blue-green-processes.json'), options.injector, undefined, options.logs);
     this.proxy = new BlueGreenHttpProxy(options.proxyPort);
     this.filename = join(this.storage.root, 'applications', options.applicationId, 'blue-green.json');
     this.healthPath = options.healthPath ?? '/health';
@@ -223,6 +224,7 @@ export class BlueGreenDeploymentManager {
     return {
       id: this.processId(slot),
       entry: release.entry,
+      releaseVersion: release.version,
       cwd: release.directory,
       applicationEnv: { ...config.environment, ...this.options.applicationEnv },
       env: {
