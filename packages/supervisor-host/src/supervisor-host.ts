@@ -1,4 +1,5 @@
-import { resolve, join } from 'node:path';
+import { join } from 'node:path';
+import { resolveSupervisorPaths } from './supervisor-paths.js';
 import { resolveNodeRuntime } from './node-runtime-resolution.js';
 import { ChildProcessLogs } from '../../process-manager/src/index.js';
 import { ApplicationLifecycleManager } from '../../adapter-process/src/application-lifecycle-manager.js';
@@ -59,8 +60,11 @@ export class SupervisorHost {
       throw new Error('Set ARM_MANAGEMENT_TOKEN (at least 16 characters)');
     }
 
-    const nodeRuntime = resolveNodeRuntime(env);
-    const storageRoot = resolve(env.ARM_DEPLOYMENT_ROOT ?? './supervisor-data');
+    const paths = resolveSupervisorPaths(env);
+    const nodeRuntime = resolveNodeRuntime({ ...env,
+      ARM_NODE_EXECUTABLE: paths.nodeExecutable, ARM_NPM_CLI: paths.npmCli,
+    }, paths.baseDirectory);
+    const storageRoot = paths.storageRoot;
     const managementPort = this.readPort(env.ARM_MANAGEMENT_PORT, 3300, true);
     const bridgeId = env.ARM_CLIENT_BRIDGE_APP_ID;
     const registrationPort = this.readPort(env.ARM_BRIDGE_REGISTRATION_PORT, 3200);
@@ -77,6 +81,7 @@ export class SupervisorHost {
     const injector = injectionEnabled ? new ArmRuntimeInjector({
       mode: bridgeId ? 'bridge' : 'automatic',
       telemetryRoot,
+      runtimeAssets: paths.runtimeAssets,
       ...(bridgeId ? {
         bridgeApplicationId: bridgeId,
         bridgeMetricsBasePort: this.readPort(env.ARM_BRIDGE_METRICS_BASE_PORT, 3500),

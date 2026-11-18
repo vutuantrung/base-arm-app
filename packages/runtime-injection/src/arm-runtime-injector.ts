@@ -1,11 +1,14 @@
 import { accessSync, constants, existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { join } from 'node:path';
 
 export type ArmInjectionMode = 'disabled' | 'automatic' | 'bridge';
 
 export interface ArmRuntimeInjection {
   mode: ArmInjectionMode;
   bootstrapPath?: string;
+  /** Explicit external resource tree for packaged execution. */
+  runtimeAssets?: string;
   telemetryRoot?: string;
   sampleIntervalMs?: number;
   /** Bridge is limited to one named app to avoid metrics-port collisions. */
@@ -36,10 +39,17 @@ export class ArmRuntimeInjector {
   nodeArguments(entry: string, args: string[] = [], applicationId?: string): string[] {
     if (this.config.mode === 'disabled') return [entry, ...args];
     const bridge = this.shouldBridge(applicationId);
-    const bootstrap = this.config.bootstrapPath ?? fileURLToPath(new URL(
-      bridge ? '../runtime/bridge-bootstrap.mjs' : '../runtime/bootstrap.mjs', import.meta.url));
+    const bootstrap = this.resolveBootstrap(bridge);
     accessSync(bootstrap, constants.R_OK);
-    return ['--import', bootstrap, entry, ...args];
+    // Windows drive paths are not valid ESM URL specifiers.
+    return ['--import', process.platform === 'win32' ? pathToFileURL(bootstrap).href : bootstrap, entry, ...args];
+  }
+
+  private resolveBootstrap(bridge: boolean): string {
+    if (this.config.bootstrapPath) return this.config.bootstrapPath;
+    const name = bridge ? 'bridge-bootstrap.mjs' : 'bootstrap.mjs';
+    if (this.config.runtimeAssets) return join(this.config.runtimeAssets, 'preloads', name);
+    return fileURLToPath(new URL('../runtime/' + name, import.meta.url));
   }
 
   environment(applicationId: string, instanceId: string): Record<string, string> {
@@ -68,6 +78,11 @@ export class ArmRuntimeInjector {
    * The Supervisor owns this module, never an uploaded application ZIP.
    */
   private resolveArmClientModule(): string {
+    if (this.config.runtimeAssets) {
+      const compiled = join(this.config.runtimeAssets, 'dist', 'packages', 'arm-client-sdk', 'src', 'arm-runtime.js');
+      accessSync(compiled, constants.R_OK);
+      return compiled;
+    }
     const candidates = [
       // Canonical SDK artifact; resolve from both source/tsx and compiled dist.
       new URL('../../../dist/packages/arm-client-sdk/src/arm-runtime.js', import.meta.url),

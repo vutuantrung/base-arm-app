@@ -13,9 +13,13 @@ export interface ApplicationConfiguration {
 export class ApplicationConfigurationStore {
   constructor(private readonly storageRoot: string) {}
 
-  async read(applicationId: string): Promise<ApplicationConfiguration> {
+  pathFor(applicationId: string): string {
     if (!VALID_ID.test(applicationId)) throw new Error('Invalid application ID');
-    const file = join(this.storageRoot, 'applications', applicationId, 'application-config.json');
+    return join(this.storageRoot, 'applications', applicationId, 'application-config.json');
+  }
+
+  async read(applicationId: string): Promise<ApplicationConfiguration> {
+    const file = this.pathFor(applicationId);
     let raw: string;
     try { raw = await readFile(file, 'utf8'); }
     catch (error) {

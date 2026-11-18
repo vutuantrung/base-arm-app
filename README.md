@@ -1,3 +1,7 @@
+## PKG.2 — Application paths and external resources
+
+The management entrypoint resolves .env, storage, child Node and explicit runtime assets consistently. SEA mode uses the executable directory; source mode preserves working-directory semantics. See [PKG.2](docs/PHASE_PKG_2_APPLICATION_PATH_AND_RESOURCE_RESOLUTION.md).
+
 ## PKG.1 — Configurable child Node runtime
 
 See [PKG.1 runtime resolution](docs/PHASE_PKG_1_RUNTIME_EXECUTABLE_RESOLUTION.md). Optional `ARM_NODE_EXECUTABLE` and `ARM_NPM_CLI` select a trusted Node toolchain for children, npm installation and manifest compatibility. This is not yet an EXE build.

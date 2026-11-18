@@ -1,7 +1,10 @@
-import 'dotenv/config';
-import { SupervisorHost } from '../../../packages/supervisor-host/src/index.js';
+import { config } from 'dotenv';
+import { SupervisorHost, resolveSupervisorPaths } from '../../../packages/supervisor-host/src/index.js';
 
 async function main(): Promise<void> {
+  const { environmentFile } = resolveSupervisorPaths(process.env);
+  const loaded = config({ path: environmentFile });
+  if (loaded.error && (loaded.error as NodeJS.ErrnoException).code !== 'ENOENT') throw loaded.error;
   const host = new SupervisorHost({ environment: process.env });
   await host.start();
 
