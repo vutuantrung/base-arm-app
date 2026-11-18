@@ -1,4 +1,5 @@
 import { resolve, join } from 'node:path';
+import { resolveNodeRuntime } from './node-runtime-resolution.js';
 import { ChildProcessLogs } from '../../process-manager/src/index.js';
 import { ApplicationLifecycleManager } from '../../adapter-process/src/application-lifecycle-manager.js';
 import { ApplicationManagementApi } from '../../adapter-process/src/application-management-api.js';
@@ -58,6 +59,7 @@ export class SupervisorHost {
       throw new Error('Set ARM_MANAGEMENT_TOKEN (at least 16 characters)');
     }
 
+    const nodeRuntime = resolveNodeRuntime(env);
     const storageRoot = resolve(env.ARM_DEPLOYMENT_ROOT ?? './supervisor-data');
     const managementPort = this.readPort(env.ARM_MANAGEMENT_PORT, 3300, true);
     const bridgeId = env.ARM_CLIENT_BRIDGE_APP_ID;
@@ -98,7 +100,7 @@ export class SupervisorHost {
     }
 
     this.lifecycle = new ApplicationLifecycleManager({
-      storageRoot, injector, logs, metricsToken: env.ARM_METRICS_TOKEN, runtimeEnv,
+      storageRoot, injector, logs, nodeExecutable: nodeRuntime?.executable, metricsToken: env.ARM_METRICS_TOKEN, runtimeEnv,
     });
     this.monitor = new ApplicationRuntimeMonitor(this.lifecycle, {
       intervalMs: this.readPositiveInteger(env.ARM_MONITOR_INTERVAL_MS, 1000),
@@ -106,14 +108,14 @@ export class SupervisorHost {
     }, new RuntimeStateStore(storageRoot));
     this.registerMonitorDiagnostics();
 
-    this.releases = new ApplicationReleaseManager(this.monitor, { storageRoot });
+    this.releases = new ApplicationReleaseManager(this.monitor, { storageRoot, nodeRuntime });
     this.rollout = new SafeRolloutManager(this.monitor, this.releases, storageRoot, {
       stabilityWindowMs: this.readPositiveInteger(env.ARM_ROLLOUT_STABILITY_MS, 1500),
     });
 
     // Blue/Green remains a deployment coordinator, not a traffic adapter.
     this.blueGreen = env.ARM_BLUE_GREEN_APP_ID ? new BlueGreenDeploymentManager({
-      storageRoot, injector, logs, runtimeEnv,
+      storageRoot, injector, logs, nodeExecutable: nodeRuntime?.executable, runtimeEnv,
       applicationId: env.ARM_BLUE_GREEN_APP_ID,
       proxyPort: this.readPort(env.ARM_PROXY_PORT, 3400),
       ...(env.ARM_BLUE_PORT ? { bluePort: this.readPort(env.ARM_BLUE_PORT, 3401) } : {}),

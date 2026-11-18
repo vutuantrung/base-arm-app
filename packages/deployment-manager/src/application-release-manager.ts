@@ -1,3 +1,4 @@
+import type { NodeRuntimeToolchain } from '../../contracts/src/index.js';
 import { DeploymentManager } from '../../package-manager/src/deployment-manager.js';
 import type { DeploymentReceipt, InstalledRelease } from '../../package-manager/src/deployment-types.js';
 import type { ReleaseRuntimePort } from './runtime-ports.js';
@@ -6,6 +7,7 @@ import { ReleaseHistoryStore, type ReleaseTransition } from './release-history-s
 
 export interface ReleaseManagementOptions {
   storageRoot: string;
+  nodeRuntime?: NodeRuntimeToolchain;
 }
 
 /**
@@ -22,7 +24,7 @@ export class ApplicationReleaseManager {
     private readonly monitor: ReleaseRuntimePort,
     options: ReleaseManagementOptions,
   ) {
-    this.deployments = new DeploymentManager({ storageRoot: options.storageRoot });
+    this.deployments = new DeploymentManager({ storageRoot: options.storageRoot, nodeRuntime: options.nodeRuntime });
     this.audit = new DeploymentAuditLog(options.storageRoot);
     this.history = new ReleaseHistoryStore(options.storageRoot);
   }

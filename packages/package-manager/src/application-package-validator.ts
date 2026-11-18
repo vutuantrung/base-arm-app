@@ -57,9 +57,10 @@ export function validateArchiveEntryPath(name: string): string {
   }
   return entry;
 }
-export function validateRuntimeCompatibility(required: string): void {
+export function validateRuntimeCompatibility(required: string, nodeVersion = process.versions.node): void {
   const minimum = Number(/^>=\s*(\d+)/.exec(required)?.[1]);
-  if (!Number.isInteger(minimum) || Number(process.versions.node.split('.')[0]) < minimum) {
+  const actual = Number(nodeVersion.split('.')[0]);
+  if (!Number.isInteger(minimum) || !Number.isInteger(actual) || actual < minimum) {
     throw new Error(`This deployment requires Node.js ${required}`);
   }
 }

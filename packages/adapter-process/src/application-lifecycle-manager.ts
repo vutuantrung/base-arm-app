@@ -36,6 +36,7 @@ export interface ApplicationLifecycleOptions {
   runtimeEnv?: Record<string, string>;
   injector?: ArmRuntimeInjector;
   logs?: ChildProcessLogs;
+  nodeExecutable?: string;
 }
 
 const APPLICATION_ID = /^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$/;
@@ -60,7 +61,7 @@ export class ApplicationLifecycleManager {
     this.configurations = new ApplicationConfigurationStore(this.storage.root);
     this.processes = new ProcessManager(
       options.processStateFile ?? join(this.storage.root, 'state', 'processes.json'),
-      options.injector, undefined, options.logs,
+      options.injector, undefined, options.logs, options.nodeExecutable,
     );
   }
 

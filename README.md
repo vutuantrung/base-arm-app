@@ -1,3 +1,7 @@
+## PKG.1 — Configurable child Node runtime
+
+See [PKG.1 runtime resolution](docs/PHASE_PKG_1_RUNTIME_EXECUTABLE_RESOLUTION.md). Optional `ARM_NODE_EXECUTABLE` and `ARM_NPM_CLI` select a trusted Node toolchain for children, npm installation and manifest compatibility. This is not yet an EXE build.
+
 ## Child Process Logging & Diagnostics (opt-in)
 
 Set `ARM_CHILD_LOGGING=1` in the Supervisor `.env`, restart the Supervisor, then restart the desired child through Management API. Each new launch writes separate stdout, stderr and diagnostic records under `supervisor-data/logs/<processId>/<runId>/`. Existing detached children are not retroactively redirected. See [Child Process Logging](docs/CHILD_PROCESS_LOGGING.md).

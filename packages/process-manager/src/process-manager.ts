@@ -84,6 +84,7 @@ export class ProcessManager extends EventEmitter {
     private readonly injector?: ProcessLaunchInstrumentation,
     private readonly environmentBuilder: ChildEnvironmentBuilder = new ChildEnvironmentBuilder(),
     private readonly logs?: ChildProcessLogs,
+    private readonly nodeExecutable: string = process.execPath,
   ) {
     super();
   }
@@ -294,7 +295,7 @@ export class ProcessManager extends EventEmitter {
       });
       // The OS selects an available port during the allocator probe. This
       // allocation is advisory until the child actually binds and confirms readiness.
-      child = spawn(process.execPath,
+      child = spawn(this.nodeExecutable,
         this.injector?.nodeArguments(spec.entry, spec.args, applicationId) ??
           [spec.entry, ...(spec.args ?? [])], {
           cwd: spec.cwd,

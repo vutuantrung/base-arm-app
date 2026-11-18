@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { resolveNodeRuntime } from '../../../packages/supervisor-host/src/index.js';
 import { resolve } from 'node:path';
 import { ApplicationLifecycleManager } from '../../../packages/adapter-process/src/application-lifecycle-manager.js';
 
@@ -9,6 +10,7 @@ const version = process.argv[4];
 const manager = new ApplicationLifecycleManager({
   storageRoot: resolve(process.env.ARM_DEPLOYMENT_ROOT ?? './supervisor-data'),
   metricsToken: process.env.ARM_METRICS_TOKEN,
+  nodeExecutable: resolveNodeRuntime(process.env)?.executable,
 });
 
 async function run(): Promise<unknown> {

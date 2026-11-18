@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { resolveNodeRuntime } from '../../../packages/supervisor-host/src/index.js';
 import { resolve } from 'node:path';
 import { ProcessManager } from '../../../packages/process-manager/src/index.js';
 import { RemoteArmMetricsCollector } from '../../../packages/adapter-process/src/remote-arm-metrics-collector.js';
@@ -17,7 +18,7 @@ const app = {
   metricsToken: process.env.ARM_METRICS_TOKEN,
 };
 
-const manager = new ProcessManager(stateFile);
+const manager = new ProcessManager(stateFile, undefined, undefined, undefined, resolveNodeRuntime(process.env)?.executable);
 await manager.initialize([app]);
 const child = await manager.start(app.id);
 console.log(`Managed ${app.id} PID=${child.pid} (may be adopted)`);

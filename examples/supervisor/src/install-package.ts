@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { resolveNodeRuntime } from '../../../packages/supervisor-host/src/index.js';
 import { resolve } from 'node:path';
 import { DeploymentManager } from '../../../packages/package-manager/src/index.js';
 
@@ -7,6 +8,7 @@ async function main(): Promise<void> {
   if (!archivePath) throw new Error('Usage: npm run deploy:zip -- <absolute-or-relative-zip-path>');
   const manager = new DeploymentManager({
     storageRoot: resolve(process.env.ARM_DEPLOYMENT_ROOT ?? './supervisor-data'),
+    nodeRuntime: resolveNodeRuntime(process.env),
   });
   const receipt = await manager.installZip(resolve(archivePath));
   console.log(JSON.stringify(receipt, null, 2));

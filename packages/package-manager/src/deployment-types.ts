@@ -1,3 +1,5 @@
+import type { NodeRuntimeToolchain } from '../../contracts/src/index.js';
+
 export interface ApplicationManifest {
   schemaVersion: '1.0';
   applicationId: string;
@@ -23,6 +25,7 @@ export interface InstalledRelease {
 }
 export interface DeploymentOptions {
   storageRoot: string;
+  nodeRuntime?: NodeRuntimeToolchain;
   maxArchiveBytes?: number;
   maxExtractedBytes?: number;
   maxEntries?: number;

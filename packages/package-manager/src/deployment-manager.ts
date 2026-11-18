@@ -18,7 +18,7 @@ export class DeploymentManager {
   private readonly pending = new Set<string>();
   constructor(
     private readonly options: DeploymentOptions,
-    private readonly installer: DependencyInstaller = new NpmCiInstaller(),
+    private readonly installer: DependencyInstaller = new NpmCiInstaller(options.nodeRuntime),
   ) {
     this.storage = new ApplicationStorage(options.storageRoot);
   }
@@ -57,7 +57,7 @@ export class DeploymentManager {
   private async readAndValidateManifest(staging: string): Promise<ApplicationManifest> {
     const raw = await readFile(join(staging, 'app.manifest.json'), 'utf8');
     const manifest = validateApplicationManifest(JSON.parse(raw) as unknown);
-    validateRuntimeCompatibility(manifest.runtime.nodeVersion);
+    validateRuntimeCompatibility(manifest.runtime.nodeVersion, this.options.nodeRuntime?.version);
     await this.assertRegularFileInStaging(staging, manifest.runtime.entry);
     await this.assertRegularFileInStaging(staging, 'package.json');
     await this.assertRegularFileInStaging(staging, 'package-lock.json');

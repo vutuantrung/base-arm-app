@@ -29,6 +29,7 @@ export interface BlueGreenOptions {
   drainTimeoutMs?: number;
   injector?: ArmRuntimeInjector;
   logs?: ChildProcessLogs;
+  nodeExecutable?: string;
   /** Per-application business settings, applied to each slot. */
   applicationEnv?: Record<string, string>;
   runtimeEnv?: Record<string, string>;
@@ -69,7 +70,7 @@ export class BlueGreenDeploymentManager {
     this.requestedPorts = { blue: options.bluePort, green: options.greenPort };
     this.storage = new ApplicationStorage(options.storageRoot);
     this.configurations = new ApplicationConfigurationStore(this.storage.root);
-    this.processes = new ProcessManager(join(this.storage.root, 'state', 'blue-green-processes.json'), options.injector, undefined, options.logs);
+    this.processes = new ProcessManager(join(this.storage.root, 'state', 'blue-green-processes.json'), options.injector, undefined, options.logs, options.nodeExecutable);
     this.proxy = new BlueGreenHttpProxy(options.proxyPort);
     this.filename = join(this.storage.root, 'applications', options.applicationId, 'blue-green.json');
     this.healthPath = options.healthPath ?? '/health';

@@ -161,3 +161,10 @@ export interface DomainEventPublisher {
     name: K, payload: DomainEventMap[K],
   ): Promise<void>;
 }
+
+/** Trusted operator-resolved Node toolchain, not application manifest input. */
+export interface NodeRuntimeToolchain {
+  readonly executable: string;
+  readonly version: string;
+  readonly npmCli: string;
+}
