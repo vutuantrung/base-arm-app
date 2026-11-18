@@ -1,3 +1,7 @@
+## PKG.3 — Windows x64 SEA executable
+
+On Windows x64 with Node.js 22 and npm, run `npm ci` then `npm run build:exe`. Output: `release/sea/arm-supervisor.exe`. The executable self-checks without source dependencies; running the management daemon still needs the external Node/npm toolchain and optional injection assets from PKG.2. See [PKG.3](docs/PHASE_PKG_3_SEA_BUILD_PIPELINE.md).
+
 ## PKG.2 — Application paths and external resources
 
 The management entrypoint resolves .env, storage, child Node and explicit runtime assets consistently. SEA mode uses the executable directory; source mode preserves working-directory semantics. See [PKG.2](docs/PHASE_PKG_2_APPLICATION_PATH_AND_RESOURCE_RESOLUTION.md).
