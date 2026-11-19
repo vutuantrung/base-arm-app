@@ -152,3 +152,6 @@ vite.config.ts.timestamp-*
 supervisor-data/
 # SEA build artifacts
 /release/sea/
+
+# PKG.4 distribution and temporary assembly
+/release/portable/

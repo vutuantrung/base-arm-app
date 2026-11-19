@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { once } from 'node:events';
 import { copyFile, mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { tmpdir } from 'node:os';
 import assert from 'node:assert/strict';
 
@@ -77,7 +77,7 @@ async function createExecutable(directory, main) {
   return exe;
 }
 
-async function verifyExecutable(exe) {
+export async function verifyExecutable(exe) {
   const cwd = await mkdtemp(join(tmpdir(), 'arm-sea-check-'));
   try {
     const output = run(exe, ['--sea-self-check'], {
@@ -93,7 +93,7 @@ async function verifyExecutable(exe) {
 }
 
 /** Run the actual bundled management daemon without project CWD or config. */
-async function verifyManagementApi(exe) {
+export async function verifyManagementApi(exe, runtime = { executable: process.execPath, npmCli: process.env.npm_execpath }) {
   const cwd = await mkdtemp(join(tmpdir(), 'arm-sea-api-'));
   const configPath = join(dirname(exe), '.env');
   const token = randomBytes(24).toString('hex');
@@ -105,12 +105,18 @@ async function verifyManagementApi(exe) {
       'ARM_MANAGEMENT_TOKEN=' + token,
       'ARM_MANAGEMENT_PORT=0',
       'ARM_DEPLOYMENT_ROOT=./smoke-data',
-      'ARM_NODE_EXECUTABLE=' + JSON.stringify(process.execPath.replaceAll('\\', '/')),
-      'ARM_NPM_CLI=' + JSON.stringify(process.env.npm_execpath.replaceAll('\\', '/')),
+      ...(runtime.isolated ? [] : [
+        'ARM_NODE_EXECUTABLE=' + JSON.stringify(runtime.executable.replaceAll('\\', '/')),
+        'ARM_NPM_CLI=' + JSON.stringify(runtime.npmCli.replaceAll('\\', '/')),
+      ]),
       'ARM_AUTO_INJECT=0',
     ].join('\n') + '\n');
     const env = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
       !/^(ARM_|DOTENV_|NODE_OPTIONS$|NODE_PATH$)/i.test(key)));
+    if (runtime.isolated) {
+      for (const key of Object.keys(env)) if (/^(path|node_path|npm_.*)$/i.test(key)) delete env[key];
+      env.PATH = join(process.env.SystemRoot || 'C:/Windows', 'System32');
+    }
     child = spawn(exe, [], {
       cwd, env, shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -150,6 +156,8 @@ async function verifyManagementApi(exe) {
       child.kill();
       await exit.catch(() => {});
     }
+    await rm(configPath, { force: true });
+    await rm(join(dirname(exe), 'smoke-data'), { recursive: true, force: true });
     await rm(cwd, { recursive: true, force: true });
   }
 }
@@ -169,4 +177,4 @@ async function main() {
   } finally { await rm(staging, { recursive: true, force: true }); }
 }
 
-await main();
+if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) await main();

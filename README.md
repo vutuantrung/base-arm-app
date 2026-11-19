@@ -1,3 +1,7 @@
+## PKG.4 — Windows x64 portable ZIP
+
+On Windows x64 with Node 22, run `npm ci` and `npm run package:windows`. The output under `release/portable/` includes the SEA supervisor, official Node/npm runtime and SDK assets. See [PKG.4](docs/PHASE_PKG_4_PORTABLE_DISTRIBUTION.md). No Node/npm installation is required on the target PC for the packaged baseline.
+
 ## PKG.3 — Windows x64 SEA executable
 
 On Windows x64 with Node.js 22 and npm, run `npm ci` then `npm run build:exe`. Output: `release/sea/arm-supervisor.exe`. The executable self-checks without source dependencies; running the management daemon still needs the external Node/npm toolchain and optional injection assets from PKG.2. See [PKG.3](docs/PHASE_PKG_3_SEA_BUILD_PIPELINE.md).
