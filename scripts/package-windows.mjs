@@ -1,10 +1,9 @@
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { cp, copyFile, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { createReadStream, createWriteStream } from 'node:fs';
-import { pipeline } from 'node:stream/promises';
-import { Readable } from 'node:stream';
-import { join } from 'node:path';
+import { createReadStream } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { acquireNodeArchive } from './node-runtime-archive.mjs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
 import { verifyExecutable, verifyManagementApi } from './build-sea.mjs';
@@ -31,24 +30,12 @@ async function sha256(file) {
   return hash.digest('hex');
 }
 
-async function download(url, destination) {
-  const response = await fetch(url, { signal: AbortSignal.timeout(180000) });
-  if (!response.ok || !response.body) throw new Error('Download failed: ' + url + ' HTTP ' + response.status);
-  await pipeline(Readable.fromWeb(response.body), createWriteStream(destination, { flags: 'wx' }));
-}
-
 async function stageNodeRuntime(staging, distribution) {
-  const origin = 'https://nodejs.org/dist/v' + version + '/';
-  const zipName = nodeName + '.zip';
-  const archive = join(staging, zipName);
-  const checksums = join(staging, 'SHASUMS256.txt');
-  await download(origin + 'SHASUMS256.txt', checksums);
-  const expected = (await readFile(checksums, 'utf8')).split(/\r?\n/)
-    .map(line => line.trim().split(/\s+/))
-    .find(parts => parts[1] === zipName)?.[0];
-  if (!expected || !/^[a-f0-9]{64}$/i.test(expected)) throw new Error('Missing official Node ZIP checksum');
-  await download(origin + zipName, archive);
-  assert.equal(await sha256(archive), expected.toLowerCase(), 'Node runtime checksum mismatch');
+  const cache = resolve(process.env.ARM_NODE_CACHE_DIR || join(root, 'release', 'node-cache'));
+  const { archive, checksums, expected } = await acquireNodeArchive({
+    version, cache, staging, localArchive: process.env.ARM_NODE_ZIP,
+    localChecksums: process.env.ARM_NODE_SHASUMS,
+  });
   run(tar, ['-xf', archive, '-C', staging], staging);
   await rename(join(staging, nodeName), join(distribution, 'runtime'));
   await copyFile(checksums, join(distribution, 'NODE-SHASUMS256.txt'));

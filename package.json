@@ -19,7 +19,8 @@
     "check:architecture": "node scripts/check-architecture.mjs",
     "verify": "npm run build && npm run check:architecture && npm test",
     "build:exe": "npm run build && node scripts/build-sea.mjs",
-    "package:windows": "npm run build:exe && node scripts/package-windows.mjs"
+    "package:windows": "npm run build:exe && node scripts/package-windows.mjs",
+    "package:windows:reuse-exe": "node scripts/package-windows.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

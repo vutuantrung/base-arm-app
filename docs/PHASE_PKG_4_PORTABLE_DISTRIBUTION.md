@@ -27,3 +27,15 @@ Also supports list, stop, restart. Logging requires ARM_CHILD_LOGGING=1 before c
 
 ## Package validation
 Checks bundled node/npm versions, SDK import, offline zero-dependency npm ci, SEA self-check, and Management API authentication/startup with isolated PATH and unrelated CWD. The ZIP is re-extracted and its executable and .env.example checksums are compared; SEA and management startup are repeated from the extracted tree using executable-relative defaults and restricted PATH. These are smoke tests, not complete child deployment, recovery, bridge startup, or Windows process adoption integration tests. PKG.5 will cover lifecycle/injection/recovery on a clean target. Signature and release automation are later work. No process state schema, R7.1 or application API changes. Moving an already populated storage root is not supported; older release records contain absolute paths. Stop Windows children before stopping/replacing supervisor because adoption is limited.
+
+## Offline Node archive acquisition
+
+Download the matching Windows x64 ZIP and SHASUMS256.txt from the official Node release directory on a connected machine. Copy both to the build PC. In PowerShell:
+
+```powershell
+$env:ARM_NODE_ZIP = 'D:/node-cache/node-v22.11.0-win-x64.zip'
+$env:ARM_NODE_SHASUMS = 'D:/node-cache/SHASUMS256.txt'
+npm run package:windows:reuse-exe
+```
+
+Use the exact Node version used to build SEA. Both inputs are verified against the expected official checksum filename. No download occurs in local mode; missing or invalid files fail explicitly. Alternatively place both files in release/node-cache/v22.11.0/ (override root via ARM_NODE_CACHE_DIR). Cache is verified on every use; corrupt cache fails closed, remove/replace it explicitly. Automatic download retries three times and stores verified inputs. Checksum file must come from a trusted source; no independent signature verification. Reuse-exe skips the SEA build only; use it only with the verified current-source executable built by the exact same Node version. It still runs distribution checks. Full normal build is required after source changes. Node/npm dependencies for the build must already be installed for offline use.
